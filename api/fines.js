@@ -6,7 +6,7 @@ const crypto = require('crypto');
 // Admin code: type it between the quotes, e.g. 'magpies2026'. Use at least 6 characters.
 // Anyone who can read this file can read the code, so keep the GitHub repo PRIVATE.
 // While this is blank, the ADMIN_PIN setting in Vercel is used instead (if there is one).
-const ADMIN_CODE = '';
+const ADMIN_CODE = '7303';
 // Only used the very first time the site runs. After that, manage players from the Admin screen.
 const STARTING_PLAYERS = ['Ayrton', 'Greg', 'Louis', 'George', 'Spencer', 'Hamish', 'Manning', 'Reid', 'Luke', 'Jack'];
 const VOTING_HOURS = 48;   // fines not decided in this time lapse
