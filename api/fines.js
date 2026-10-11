@@ -11,7 +11,7 @@ const MAX_FINE = 500;      // biggest single fine allowed, in dollars
 
 const DB_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
 const DB_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-const K = { pins: 'fines:pins', fines: 'fines:fines', votes: 'fines:votes', fail: 'fines:fail:' };
+const K = { pins: 'fines:pins', fines: 'fines:fines', votes: 'fines:votes', fail: 'fines:fail:', bogRounds: 'fines:bog:rounds', bogVotes: 'fines:bog:votes' };
 
 function err(status, message) { const e = new Error(message); e.status = status; return e; }
 
@@ -84,8 +84,43 @@ function statusOf(fine, votes, now) {
   return 'open';
 }
 
+function parseAll(raw) {
+  return Object.values(toObj(raw)).map((x) => (typeof x === 'string' ? JSON.parse(x) : x));
+}
+
+// Which best-on-ground rounds this player has already voted in.
+async function myBog(name) {
+  const [votes] = await redis([['HGETALL', K.bogVotes]]);
+  return Object.keys(toObj(votes)).filter((k) => k.endsWith('|' + name)).map((k) => k.split('|')[0]);
+}
+
+// Admin-only view: MVP leaderboard plus who has and hasn't voted in each round.
+async function bogAdmin() {
+  const [roundsRaw, votesRaw] = await redis([['HGETALL', K.bogRounds], ['HGETALL', K.bogVotes]]);
+  const votes = toObj(votesRaw);
+  const tally = Object.fromEntries(PLAYERS.map((p) => [p, { name: p, points: 0, threes: 0, twos: 0, ones: 0 }]));
+  const rounds = parseAll(roundsRaw).sort((a, b) => b.createdAt - a.createdAt).map((r) => {
+    const voted = [], missing = [];
+    for (const p of PLAYERS) {
+      let v = votes[r.id + '|' + p];
+      if (!v) { missing.push(p); continue; }
+      voted.push(p);
+      if (typeof v === 'string') v = JSON.parse(v);
+      v.forEach((who, i) => {
+        if (!tally[who]) return;
+        tally[who].points += 3 - i;
+        tally[who][['threes', 'twos', 'ones'][i]]++;
+      });
+    }
+    return { ...r, voted, missing };
+  });
+  const leaderboard = Object.values(tally).sort((a, b) =>
+    b.points - a.points || b.threes - a.threes || b.twos - a.twos || a.name.localeCompare(b.name));
+  return { rounds, leaderboard };
+}
+
 async function getState() {
-  const [pins, finesRaw, votesRaw] = await redis([['HGETALL', K.pins], ['HGETALL', K.fines], ['HGETALL', K.votes]]);
+  const [pins, finesRaw, votesRaw, bogRaw] = await redis([['HGETALL', K.pins], ['HGETALL', K.fines], ['HGETALL', K.votes], ['HGETALL', K.bogRounds]]);
   const pinMap = toObj(pins), allVotes = toObj(votesRaw), now = Date.now();
   const fines = Object.values(toObj(finesRaw)).map((raw) => {
     const f = typeof raw === 'string' ? JSON.parse(raw) : raw;
@@ -97,6 +132,8 @@ async function getState() {
   return {
     players: PLAYERS.map((name) => ({ name, hasPin: !!pinMap[name] })),
     fines,
+    // Round names only. Votes and results are never sent to the public page.
+    bogRounds: parseAll(bogRaw).sort((a, b) => b.createdAt - a.createdAt),
     config: { votingHours: VOTING_HOURS, votesNeeded: VOTES_NEEDED, maxFine: MAX_FINE, adminEnabled: !!process.env.ADMIN_PIN },
   };
 }
@@ -153,6 +190,55 @@ module.exports = async (req, res) => {
         break;
       }
 
+      case 'bog_mine':
+        await signIn(b.name, b.pin, false);
+        break;
+
+      case 'bog_vote': {
+        await signIn(b.name, b.pin, false);
+        const picks = Array.isArray(b.picks) ? b.picks.map(String) : [];
+        if (picks.length !== 3 || picks.some((x) => !PLAYERS.includes(x))) throw err(400, 'Pick a player for 3, 2 and 1 votes.');
+        if (new Set(picks).size !== 3) throw err(400, 'Pick three different players.');
+        if (picks.includes(b.name)) throw err(403, "You can't vote for yourself.");
+        const [raw] = await redis([['HGET', K.bogRounds, String(b.id)]]);
+        if (!raw) throw err(404, 'That game no longer exists.');
+        const round = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (!round.open) throw err(409, 'Voting for that game has closed.');
+        // HSETNX only writes if this player hasn't voted in this round yet.
+        const [set] = await redis([['HSETNX', K.bogVotes, round.id + '|' + b.name, JSON.stringify(picks)]]);
+        if (set !== 1) throw err(409, "You've already voted for that game.");
+        break;
+      }
+
+      case 'admin_bog':
+        await requireAdmin(b.adminPin);
+        break;
+
+      case 'admin_bog_open': {
+        await requireAdmin(b.adminPin);
+        const name = String(b.roundName || '').trim().slice(0, 60);
+        if (!name) throw err(400, 'Give the game a name, e.g. Round 5 v Tigers.');
+        const now = Date.now();
+        const round = { id: now.toString(36) + crypto.randomBytes(3).toString('hex'), name, open: true, createdAt: now };
+        await redis([['HSET', K.bogRounds, round.id, JSON.stringify(round)]]);
+        break;
+      }
+
+      case 'admin_bog_toggle': {
+        await requireAdmin(b.adminPin);
+        const [raw] = await redis([['HGET', K.bogRounds, String(b.id)]]);
+        if (!raw) throw err(404, 'That game no longer exists.');
+        const round = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        round.open = !round.open;
+        await redis([['HSET', K.bogRounds, round.id, JSON.stringify(round)]]);
+        break;
+      }
+
+      case 'admin_bog_delete':
+        await requireAdmin(b.adminPin);
+        await redis([['HDEL', K.bogRounds, String(b.id)], ['HDEL', K.bogVotes, ...PLAYERS.map((p) => b.id + '|' + p)]]);
+        break;
+
       case 'admin_check':
         await requireAdmin(b.adminPin);
         break;
@@ -170,12 +256,14 @@ module.exports = async (req, res) => {
 
       case 'admin_reset_season':
         await requireAdmin(b.adminPin);
-        await redis([['DEL', K.fines, K.votes]]);
+        await redis([['DEL', K.fines, K.votes, K.bogRounds, K.bogVotes]]);
         break;
 
       default:
         throw err(400, 'Unknown action.');
     }
+    if (['login', 'bog_mine', 'bog_vote'].includes(b.action)) extra.myBog = await myBog(b.name);
+    if (b.action.startsWith('admin_')) extra.bog = await bogAdmin();
     return res.status(200).json({ ok: true, ...extra, state: await getState() });
   } catch (e) {
     return res.status(e.status || 500).json({ error: e.message || 'Something went wrong.' });

@@ -43,6 +43,11 @@
   textarea { resize: vertical; min-height: 64px; }
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .field { margin-bottom: 12px; }
+  .row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .sub { font-family: var(--display); font-weight: 800; text-transform: uppercase; letter-spacing: .04em; font-size: 18px; margin: 20px 0 8px; }
+  .mvp { display: grid; grid-template-columns: 28px 1fr auto auto; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); align-items: baseline; }
+  .mvp b { font-family: var(--display); font-size: 20px; }
+  .rnd { padding: 10px 0; border-bottom: 1px solid var(--line); }
 
   /* Ladder */
   .pot { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 16px; border-bottom: 2px solid var(--ink); }
@@ -81,7 +86,7 @@
   details > summary { cursor: pointer; font-weight: 600; padding: 14px 16px; }
   #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 12px 18px; border-radius: 8px; max-width: calc(100% - 32px); display: none; z-index: 5; }
   #toast.bad { background: var(--red); }
-  @media (max-width: 420px) { .row { grid-template-columns: 1fr; } h1 { font-size: 30px; } }
+  @media (max-width: 420px) { .row, .row3 { grid-template-columns: 1fr; } h1 { font-size: 30px; } }
 </style>
 </head>
 <body>
@@ -114,6 +119,11 @@
   <section>
     <h2>Up for a vote <small id="openCount"></small></h2>
     <div class="panel" id="open"><div class="empty">Loading…</div></div>
+  </section>
+
+  <section>
+    <h2>Best on ground <small>3-2-1 votes, results stay secret</small></h2>
+    <div class="panel" id="bog"><div class="empty">Loading…</div></div>
   </section>
 
   <section>
@@ -159,6 +169,7 @@ function store(kind, key, val) {
 let state = null;
 let me = null; try { me = JSON.parse(store('local', 'fines_me') || 'null'); } catch (e) {}
 let adminPin = store('session', 'fines_admin') || '';
+let myBog = null, adminBog = null, bogSig = '';
 
 // Tiny DOM builder: text is always inserted as text, never as HTML.
 function h(tag, attrs, ...kids) {
@@ -196,6 +207,8 @@ async function post(action, body) {
   });
   let data = {}; try { data = await r.json(); } catch (e) {}
   if (!r.ok) throw new Error(data.error || 'Something went wrong.');
+  if (data.myBog) myBog = data.myBog;
+  if (data.bog) adminBog = data.bog;
   if (data.state) { state = data.state; render(); }
   return data;
 }
@@ -293,7 +306,9 @@ function render() {
   $('open').replaceChildren(...(openFines.length ? openFines.map(fineCard) : [h('div', { class: 'empty' }, 'Nothing to vote on. Everyone is behaving, apparently.')]));
   $('history').replaceChildren(...(done.length ? done.map(fineCard) : [h('div', { class: 'empty' }, 'No fines decided yet.')]));
 
+  renderBog(names);
   renderAdmin(names);
+  renderBogAdmin();
 }
 
 function fillSelect(sel, names, placeholder) {
@@ -307,7 +322,7 @@ function updateHint() {
 }
 $('siName').addEventListener('change', updateHint);
 
-function signOut() { me = null; store('local', 'fines_me', null); render(); }
+function signOut() { me = null; myBog = null; store('local', 'fines_me', null); render(); }
 
 $('signinForm').addEventListener('submit', (ev) => {
   ev.preventDefault();
@@ -352,15 +367,79 @@ function renderAdmin(names) {
   const sel = h('select', { 'aria-label': 'Player' }, h('option', { value: '' }, 'Pick a player'), ...names.map((n) => h('option', { value: n }, n)));
   body.replaceChildren(
     h('p', { class: 'meta' }, 'Admin is unlocked: every fine now has a Delete button.'),
+    h('div', { id: 'bogAdmin' }),
     h('div', { class: 'field' }, h('label', {}, "Reset a player's PIN (they set a new one next sign-in)"),
       h('div', { style: 'display:flex;gap:10px' }, sel,
         h('button', { onclick: (e) => { if (sel.value) run(e.target, async () => { await post('admin_reset_pin', { player: sel.value }); toast(sel.value + "'s PIN was reset."); }); } }, 'Reset'))),
     h('div', { class: 'actions' },
-      h('button', { class: 'danger', onclick: (e) => { if (confirm('Wipe every fine and vote and start a new season? This cannot be undone.')) run(e.target, async () => { await post('admin_reset_season', {}); toast('New season. Ladder cleared.'); }); } }, 'Reset season'),
-      h('button', { class: 'ghost', onclick: () => { adminPin = ''; store('session', 'fines_admin', null); render(); } }, 'Lock admin')));
+      h('button', { class: 'danger', onclick: (e) => { if (confirm('Wipe every fine, vote and best on ground result and start a new season? This cannot be undone.')) run(e.target, async () => { await post('admin_reset_season', {}); toast('New season. Ladder cleared.'); }); } }, 'Reset season'),
+      h('button', { class: 'ghost', onclick: () => { adminPin = ''; adminBog = null; store('session', 'fines_admin', null); render(); } }, 'Lock admin')));
 }
 
-load();
+// ---- Best on ground ------------------------------------------------------
+function renderBog(names) {
+  const rounds = (state.bogRounds || []).filter((r) => r.open);
+  const sig = JSON.stringify([rounds, me && me.name, myBog]);
+  if (sig === bogSig) return;   // don't wipe half-filled votes on the 20s refresh
+  bogSig = sig;
+  if (!rounds.length) { $('bog').replaceChildren(h('div', { class: 'empty' }, 'No game is open for votes right now.')); return; }
+  $('bog').replaceChildren(...rounds.map((r) => {
+    const card = h('div', { class: 'fine' }, h('div', { class: 'fhead' }, h('span', { class: 't' }, r.name)));
+    if (!me) card.append(h('div', { class: 'meta' }, 'Sign in to vote.'));
+    else if ((myBog || []).includes(r.id)) card.append(h('div', { class: 'meta' }, "Your votes are in. They can't be changed."));
+    else {
+      const others = names.filter((n) => n !== me.name);
+      const pick = (label) => h('select', { 'aria-label': label, required: '' }, h('option', { value: '' }, 'Pick a player'), ...others.map((n) => h('option', { value: n }, n)));
+      const sels = [pick('3 votes'), pick('2 votes'), pick('1 vote')];
+      card.append(h('form', { style: 'margin-top:10px', onsubmit: (ev) => {
+        ev.preventDefault();
+        const picks = sels.map((x) => x.value);
+        if (new Set(picks).size !== 3) { toast('Pick three different players.', true); return; }
+        run(ev.submitter, async () => { await post('bog_vote', { id: r.id, picks }); toast('Votes submitted.'); });
+      } },
+        h('div', { class: 'row3' }, ...sels.map((x, i) => h('div', { class: 'field' }, h('label', {}, ['3 votes', '2 votes', '1 vote'][i]), x))),
+        h('button', { type: 'submit' }, 'Submit votes'),
+        h('span', { class: 'meta', style: 'margin-left:10px' }, "Can't be changed once submitted.")));
+    }
+    return card;
+  }));
+}
+
+function renderBogAdmin() {
+  const box = $('bogAdmin');
+  if (!box) return;
+  if (!adminBog) {
+    if (!box.dataset.loading) { box.dataset.loading = '1'; post('admin_bog', {}).catch((e) => toast(e.message, true)); }
+    return;
+  }
+  const sig = JSON.stringify(adminBog);
+  if (box.dataset.sig === sig) return;
+  box.dataset.sig = sig;
+  const input = h('input', { placeholder: 'Round 5 v Tigers', maxlength: '60', 'aria-label': 'Game name', required: '' });
+  const act = (action, body, msg) => (e) => run(e.target, async () => { await post(action, body); if (msg) toast(msg); });
+  let pos = 0, last = null;
+  box.replaceChildren(
+    h('div', { class: 'sub' }, 'Best on ground'),
+    h('form', { style: 'display:flex;gap:10px', onsubmit: (ev) => { ev.preventDefault(); run(ev.submitter, async () => { await post('admin_bog_open', { roundName: input.value }); toast('Voting is open.'); }); } },
+      input, h('button', { type: 'submit', style: 'white-space:nowrap' }, 'Open voting')),
+    h('div', { class: 'sub' }, 'MVP leaderboard ', h('button', { class: 'ghost', onclick: act('admin_bog', {}, 'Refreshed.') }, 'Refresh')),
+    h('p', { class: 'meta', style: 'margin:0 0 6px' }, 'Only visible here, with the admin PIN.'),
+    ...adminBog.leaderboard.map((p, i) => {
+      if (p.points !== last) { pos = i + 1; last = p.points; }
+      return h('div', { class: 'mvp' }, h('span', { class: 'meta' }, p.points ? String(pos) : '–'), h('span', {}, p.name),
+        h('span', { class: 'meta' }, p.threes + '×3  ' + p.twos + '×2  ' + p.ones + '×1'), h('b', {}, String(p.points)));
+    }),
+    h('div', { class: 'sub' }, 'Games'),
+    ...(adminBog.rounds.length ? adminBog.rounds.map((r) => h('div', { class: 'rnd' },
+      h('div', {}, h('b', {}, r.name), ' · ' + (r.open ? 'open' : 'closed') + ' · ' + r.voted.length + ' of ' + (r.voted.length + r.missing.length) + ' voted'),
+      h('div', { class: 'meta' }, 'Voted: ' + (r.voted.join(', ') || 'nobody yet')),
+      h('div', { class: 'meta' }, 'Still to vote: ' + (r.missing.join(', ') || 'nobody')),
+      h('div', { class: 'actions' },
+        h('button', { class: 'ghost', onclick: act('admin_bog_toggle', { id: r.id }) }, r.open ? 'Close voting' : 'Reopen voting'),
+        h('button', { class: 'danger', onclick: (e) => { if (confirm('Delete this game and its votes for good?')) act('admin_bog_delete', { id: r.id })(e); } }, 'Delete')))) : [h('p', { class: 'meta' }, 'No games yet.')]));
+}
+
+load().then(() => { if (me) post('bog_mine', {}).catch(() => {}); });
 setInterval(load, 20000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
 </script>
