@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fines Ladder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f3efe6; --card: #fffdf8; --ink: #16181d; --muted: #6b6f76; --line: #ddd6c6;
+    --yellow: #f5c518; --red: #d7263d; --green: #1f8a4c;
+    --display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+    --body: 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.4; }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 16px 64px; }
+
+  header { background: var(--ink); color: #fff; }
+  header .wrap { padding: 20px 16px 18px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .cardicon { width: 26px; height: 36px; background: var(--yellow); border-radius: 4px; transform: rotate(-10deg); flex: none; box-shadow: 8px 3px 0 -1px var(--red); }
+  h1 { font-family: var(--display); font-weight: 800; font-size: 36px; letter-spacing: .02em; text-transform: uppercase; margin: 0; line-height: 1; flex: 1; }
+  .who { font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .who b { color: var(--yellow); }
+
+  h2 { font-family: var(--display); font-weight: 800; font-size: 24px; text-transform: uppercase; letter-spacing: .03em; margin: 32px 0 10px; display: flex; align-items: baseline; gap: 10px; }
+  h2 small { font-family: var(--body); font-weight: 500; font-size: 14px; color: var(--muted); text-transform: none; letter-spacing: 0; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+  .pad { padding: 16px; }
+  .empty { color: var(--muted); padding: 16px; font-size: 15px; }
+
+  button, select, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 0; border-radius: 8px; padding: 10px 14px; font-weight: 600; background: var(--ink); color: #fff; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.ghost { background: transparent; color: inherit; border: 1px solid currentColor; padding: 6px 10px; font-size: 14px; }
+  button.yes { background: var(--green); } button.no { background: var(--red); }
+  button.danger { background: transparent; color: var(--red); border: 1px solid var(--red); padding: 6px 10px; font-size: 13px; }
+  button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3px solid var(--yellow); outline-offset: 2px; }
+  label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+  select, input, textarea { width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  textarea { resize: vertical; min-height: 64px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .field { margin-bottom: 12px; }
+
+  /* Ladder */
+  .pot { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 16px; border-bottom: 2px solid var(--ink); }
+  .pot span { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .pot strong { font-family: var(--display); font-weight: 800; font-size: 34px; line-height: 1; }
+  .rung { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); position: relative; }
+  .rung:last-child { border-bottom: 0; }
+  .rung .bar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--yellow); opacity: .22; pointer-events: none; }
+  .rung > * { position: relative; }
+  .pos { font-family: var(--display); font-weight: 800; font-size: 22px; color: var(--muted); text-align: center; }
+  .rung.top .pos { background: var(--yellow); color: var(--ink); border-radius: 4px; }
+  .pname { font-weight: 600; font-size: 17px; }
+  .pmeta { font-size: 13px; color: var(--muted); }
+  .ptotal { font-family: var(--display); font-weight: 800; font-size: 24px; font-variant-numeric: tabular-nums; }
+  .rung.zero .ptotal { color: var(--muted); font-weight: 600; }
+
+  /* Fine cards */
+  .fine { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .fine:last-child { border-bottom: 0; }
+  .fhead { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+  .fhead .t { font-weight: 600; font-size: 18px; }
+  .fhead .a { font-family: var(--display); font-weight: 800; font-size: 26px; white-space: nowrap; }
+  .reason { margin: 4px 0 8px; overflow-wrap: anywhere; }
+  .meta { font-size: 13px; color: var(--muted); }
+  .tally { display: flex; gap: 14px; margin: 10px 0 6px; font-size: 14px; font-weight: 600; flex-wrap: wrap; }
+  .pips { display: inline-flex; gap: 3px; vertical-align: middle; margin-left: 6px; }
+  .pip { width: 12px; height: 12px; border-radius: 2px; border: 1.5px solid currentColor; }
+  .pip.on { background: currentColor; }
+  .c-yes { color: var(--green); } .c-no { color: var(--red); }
+  .voters { font-size: 13px; color: var(--muted); }
+  .actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
+  .actions button.yes, .actions button.no { flex: 1; min-width: 120px; padding: 12px; }
+  .stamp { font-family: var(--display); font-weight: 800; text-transform: uppercase; letter-spacing: .06em; font-size: 14px; padding: 1px 8px; border-radius: 4px; border: 2px solid currentColor; display: inline-block; }
+  .stamp.passed { color: var(--red); } .stamp.failed { color: var(--green); } .stamp.lapsed { color: var(--muted); }
+
+  details > summary { cursor: pointer; font-weight: 600; padding: 14px 16px; }
+  #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 12px 18px; border-radius: 8px; max-width: calc(100% - 32px); display: none; z-index: 5; }
+  #toast.bad { background: var(--red); }
+  @media (max-width: 420px) { .row { grid-template-columns: 1fr; } h1 { font-size: 30px; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="cardicon" aria-hidden="true"></div>
+    <h1>Fines Ladder</h1>
+    <div class="who" id="who"></div>
+  </div>
+</header>
+
+<div class="wrap">
+  <section id="signin" hidden>
+    <h2>Who are you?</h2>
+    <form class="panel pad" id="signinForm">
+      <div class="row">
+        <div class="field"><label for="siName">Your name</label><select id="siName" required></select></div>
+        <div class="field"><label for="siPin">4-digit PIN</label><input id="siPin" type="password" inputmode="numeric" pattern="\d{4}" maxlength="4" autocomplete="off" required></div>
+      </div>
+      <p class="meta" id="siHint" style="margin:0 0 12px"></p>
+      <button type="submit">Sign in</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>The ladder <small>approved fines only</small></h2>
+    <div class="panel" id="ladder"><div class="empty">Loading…</div></div>
+  </section>
+
+  <section>
+    <h2>Up for a vote <small id="openCount"></small></h2>
+    <div class="panel" id="open"><div class="empty">Loading…</div></div>
+  </section>
+
+  <section>
+    <h2>Write a fine</h2>
+    <form class="panel pad" id="fineForm">
+      <div class="row">
+        <div class="field"><label for="fTarget">Who's being fined</label><select id="fTarget" required></select></div>
+        <div class="field"><label for="fAmount">Amount ($)</label><input id="fAmount" type="number" inputmode="decimal" min="0.5" step="0.5" placeholder="5" required></div>
+      </div>
+      <div class="field"><label for="fReason">What did they do?</label><textarea id="fReason" maxlength="200" placeholder="Turned up late to warm-up" required></textarea></div>
+      <button type="submit">Put it to a vote</button>
+      <span class="meta" id="fineNote" style="margin-left:10px"></span>
+    </form>
+  </section>
+
+  <section>
+    <h2>Decided</h2>
+    <div class="panel" id="history"><div class="empty">Loading…</div></div>
+  </section>
+
+  <section style="margin-top:32px">
+    <details class="panel" id="adminBox">
+      <summary>Admin</summary>
+      <div class="pad" style="padding-top:0" id="adminBody"></div>
+    </details>
+  </section>
+</div>
+<div id="toast" role="status"></div>
+
+<script>
+const API = '/api/fines';
+const $ = (id) => document.getElementById(id);
+const money = (n) => new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: n % 1 ? 2 : 0 }).format(n);
+
+function store(kind, key, val) {
+  try {
+    const s = kind === 'local' ? localStorage : sessionStorage;
+    if (val === undefined) return s.getItem(key);
+    if (val === null) s.removeItem(key); else s.setItem(key, val);
+  } catch (e) { return null; }
+}
+
+let state = null;
+let me = null; try { me = JSON.parse(store('local', 'fines_me') || 'null'); } catch (e) {}
+let adminPin = store('session', 'fines_admin') || '';
+
+// Tiny DOM builder: text is always inserted as text, never as HTML.
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === 'class') el.className = v;
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid);
+  return el;
+}
+
+let toastTimer;
+function toast(msg, bad) {
+  const t = $('toast'); t.textContent = msg; t.className = bad ? 'bad' : ''; t.style.display = 'block';
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.style.display = 'none'), 4000);
+}
+
+async function load() {
+  try {
+    const r = await fetch(API, { cache: 'no-store' });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error);
+    state = data; render();
+  } catch (e) {
+    if (!state) for (const id of ['ladder', 'open', 'history']) $(id).replaceChildren(h('div', { class: 'empty' }, "Can't reach the fines database. " + (e.message || '')));
+  }
+}
+
+async function post(action, body) {
+  const r = await fetch(API, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, name: me && me.name, pin: me && me.pin, adminPin, ...body }),
+  });
+  let data = {}; try { data = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(data.error || 'Something went wrong.');
+  if (data.state) { state = data.state; render(); }
+  return data;
+}
+
+async function run(btn, fn) {
+  if (btn) btn.disabled = true;
+  try { await fn(); } catch (e) { toast(e.message, true); }
+  if (btn) btn.disabled = false;
+}
+
+function timeLeft(deadline) {
+  const ms = deadline - Date.now();
+  if (ms <= 0) return 'closing';
+  const hrs = Math.floor(ms / 3600000), mins = Math.floor((ms % 3600000) / 60000);
+  return hrs >= 1 ? hrs + 'h ' + mins + 'm left' : mins + 'm left';
+}
+const dateStr = (ts) => new Date(ts).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+
+function pips(count, need) {
+  return h('span', { class: 'pips', 'aria-hidden': 'true' }, Array.from({ length: need }, (_, i) => h('span', { class: 'pip' + (i < count ? ' on' : '') })));
+}
+
+function fineCard(f) {
+  const need = state.config.votesNeeded;
+  const yes = Object.keys(f.votes).filter((p) => f.votes[p] === 'yes');
+  const no = Object.keys(f.votes).filter((p) => f.votes[p] === 'no');
+  const open = f.status === 'open';
+  const card = h('div', { class: 'fine' },
+    h('div', { class: 'fhead' }, h('span', { class: 't' }, f.target), h('span', { class: 'a' }, money(f.amount))),
+    h('div', { class: 'reason' }, f.reason),
+    h('div', { class: 'meta' }, 'Fined by ' + f.by + ' · ' + dateStr(f.createdAt) + (open ? ' · ' + timeLeft(f.deadline) : '')),
+    h('div', { class: 'tally' },
+      h('span', { class: 'c-yes' }, 'Agree ' + yes.length + (open ? '/' + need : ''), open && pips(yes.length, need)),
+      h('span', { class: 'c-no' }, 'Disagree ' + no.length + (open ? '/' + need : ''), open && pips(no.length, need))),
+    h('div', { class: 'voters' }, (yes.length ? 'Agree: ' + yes.join(', ') : '') + (yes.length && no.length ? ' · ' : '') + (no.length ? 'Disagree: ' + no.join(', ') : ''))
+  );
+  const actions = h('div', { class: 'actions' });
+  if (open) {
+    if (!me) actions.append(h('span', { class: 'meta' }, 'Sign in to vote.'));
+    else if (f.target === me.name) actions.append(h('span', { class: 'meta' }, "This one's yours, so you sit this vote out."));
+    else if (f.votes[me.name]) actions.append(h('span', { class: 'meta' }, 'You voted ' + (f.votes[me.name] === 'yes' ? 'agree' : 'disagree') + '.'));
+    else actions.append(
+      h('button', { class: 'yes', onclick: (e) => run(e.target, () => post('vote', { id: f.id, vote: 'yes' })) }, 'Agree'),
+      h('button', { class: 'no', onclick: (e) => run(e.target, () => post('vote', { id: f.id, vote: 'no' })) }, 'Disagree'));
+  } else {
+    const label = { passed: 'Fined', failed: 'Let off', lapsed: 'Lapsed' }[f.status];
+    actions.append(h('span', { class: 'stamp ' + f.status }, label));
+  }
+  if (adminPin) actions.append(h('button', { class: 'danger', onclick: (e) => { if (confirm('Delete this fine for good?')) run(e.target, () => post('admin_delete', { id: f.id })); } }, 'Delete'));
+  card.append(actions);
+  return card;
+}
+
+function render() {
+  if (!state) return;
+  const names = state.players.map((p) => p.name);
+  if (me && !names.includes(me.name)) me = null;
+
+  // Header + sign-in
+  $('who').replaceChildren(...(me ? [h('span', {}, 'Signed in as ', h('b', {}, me.name)), h('button', { class: 'ghost', onclick: signOut }, 'Switch')] : []));
+  $('signin').hidden = !!me;
+  fillSelect($('siName'), names, 'Pick your name');
+  fillSelect($('fTarget'), names, 'Pick a player');
+  updateHint();
+  $('fineNote').textContent = me ? 'Voting stays open for ' + state.config.votingHours + ' hours.' : 'Sign in first.';
+
+  // Ladder
+  const rows = names.map((n) => ({ name: n, total: 0, count: 0, pending: 0 }));
+  const by = Object.fromEntries(rows.map((r) => [r.name, r]));
+  for (const f of state.fines) {
+    if (!by[f.target]) continue;
+    if (f.status === 'passed') { by[f.target].total += f.amount; by[f.target].count++; }
+    if (f.status === 'open') by[f.target].pending += f.amount;
+  }
+  rows.sort((a, b) => b.total - a.total || b.count - a.count || a.name.localeCompare(b.name));
+  const pot = rows.reduce((s, r) => s + r.total, 0), max = rows[0].total || 1;
+  let pos = 0, last = null;
+  $('ladder').replaceChildren(
+    h('div', { class: 'pot' }, h('span', {}, 'Team pot'), h('strong', {}, money(pot))),
+    ...rows.map((r, i) => {
+      if (r.total !== last) { pos = i + 1; last = r.total; }
+      return h('div', { class: 'rung' + (pos === 1 && r.total > 0 ? ' top' : '') + (r.total === 0 ? ' zero' : '') },
+        h('div', { class: 'bar', style: 'width:' + (r.total / max) * 100 + '%' }),
+        h('div', { class: 'pos' }, r.total > 0 ? String(pos) : '–'),
+        h('div', {}, h('div', { class: 'pname' }, r.name),
+          h('div', { class: 'pmeta' }, (r.count === 1 ? '1 fine' : r.count + ' fines') + (r.pending ? ' · ' + money(r.pending) + ' pending' : ''))),
+        h('div', { class: 'ptotal' }, money(r.total)));
+    }));
+
+  // Open + decided
+  const openFines = state.fines.filter((f) => f.status === 'open');
+  const done = state.fines.filter((f) => f.status !== 'open');
+  const mine = me ? openFines.filter((f) => f.target !== me.name && !f.votes[me.name]).length : 0;
+  $('openCount').textContent = openFines.length ? openFines.length + ' open' + (mine ? ' · ' + mine + ' waiting on you' : '') : '';
+  $('open').replaceChildren(...(openFines.length ? openFines.map(fineCard) : [h('div', { class: 'empty' }, 'Nothing to vote on. Everyone is behaving, apparently.')]));
+  $('history').replaceChildren(...(done.length ? done.map(fineCard) : [h('div', { class: 'empty' }, 'No fines decided yet.')]));
+
+  renderAdmin(names);
+}
+
+function fillSelect(sel, names, placeholder) {
+  if (sel.options.length) return;
+  sel.append(h('option', { value: '' }, placeholder), ...names.map((n) => h('option', { value: n }, n)));
+}
+
+function updateHint() {
+  const p = state && state.players.find((x) => x.name === $('siName').value);
+  $('siHint').textContent = !p ? '' : p.hasPin ? 'Enter the PIN you set earlier. Forgotten it? Ask the admin to reset it.' : 'First time: the PIN you enter now becomes your PIN. Remember it.';
+}
+$('siName').addEventListener('change', updateHint);
+
+function signOut() { me = null; store('local', 'fines_me', null); render(); }
+
+$('signinForm').addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  const name = $('siName').value, pin = $('siPin').value;
+  run(ev.submitter, async () => {
+    me = { name, pin };
+    try {
+      const d = await post('login', {});
+      store('local', 'fines_me', JSON.stringify(me)); $('siPin').value = '';
+      toast(d.created ? 'PIN set. Welcome, ' + name + '.' : 'Signed in as ' + name + '.');
+      render();
+    } catch (e) { me = null; throw e; }
+  });
+});
+
+$('fineForm').addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  if (!me) { toast('Sign in first.', true); $('signin').scrollIntoView({ behavior: 'smooth' }); return; }
+  run(ev.submitter, async () => {
+    await post('create', { target: $('fTarget').value, amount: $('fAmount').value, reason: $('fReason').value });
+    ev.target.reset(); toast('Fine is up for a vote.');
+  });
+});
+
+function renderAdmin(names) {
+  const body = $('adminBody');
+  if (body.dataset.mode === (adminPin ? 'in' : 'out')) return;
+  body.dataset.mode = adminPin ? 'in' : 'out';
+  if (!state.config.adminEnabled) { body.replaceChildren(h('p', { class: 'meta' }, 'Admin is switched off. Set an ADMIN_PIN environment variable in Vercel to turn it on.')); return; }
+  if (!adminPin) {
+    const input = h('input', { type: 'password', autocomplete: 'off', placeholder: 'Admin PIN', 'aria-label': 'Admin PIN' });
+    body.replaceChildren(h('form', { style: 'display:flex;gap:10px', onsubmit: (ev) => {
+      ev.preventDefault();
+      run(ev.submitter, async () => {
+        adminPin = input.value;
+        try { await post('admin_check', {}); store('session', 'fines_admin', adminPin); toast('Admin unlocked.'); render(); }
+        catch (e) { adminPin = ''; throw e; }
+      });
+    } }, input, h('button', { type: 'submit' }, 'Unlock')));
+    return;
+  }
+  const sel = h('select', { 'aria-label': 'Player' }, h('option', { value: '' }, 'Pick a player'), ...names.map((n) => h('option', { value: n }, n)));
+  body.replaceChildren(
+    h('p', { class: 'meta' }, 'Admin is unlocked: every fine now has a Delete button.'),
+    h('div', { class: 'field' }, h('label', {}, "Reset a player's PIN (they set a new one next sign-in)"),
+      h('div', { style: 'display:flex;gap:10px' }, sel,
+        h('button', { onclick: (e) => { if (sel.value) run(e.target, async () => { await post('admin_reset_pin', { player: sel.value }); toast(sel.value + "'s PIN was reset."); }); } }, 'Reset'))),
+    h('div', { class: 'actions' },
+      h('button', { class: 'danger', onclick: (e) => { if (confirm('Wipe every fine and vote and start a new season? This cannot be undone.')) run(e.target, async () => { await post('admin_reset_season', {}); toast('New season. Ladder cleared.'); }); } }, 'Reset season'),
+      h('button', { class: 'ghost', onclick: () => { adminPin = ''; store('session', 'fines_admin', null); render(); } }, 'Lock admin')));
+}
+
+load();
+setInterval(load, 20000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+</script>
+</body>
+</html>
