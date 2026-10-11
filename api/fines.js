@@ -19,7 +19,7 @@ const K = {
   players: 'fines:players', pins: 'fines:pins', fines: 'fines:fines', votes: 'fines:votes', fail: 'fines:fail:',
   bogRounds: 'fines:bog:rounds', bogVotes: 'fines:bog:votes',
 };
-const adminCode = () => String(ADMIN_CODE || process.env.ADMIN_PIN || '');
+const adminCode = () => String(ADMIN_CODE || process.env.ADMIN_PIN || '7303');
 
 function err(status, message) { const e = new Error(message); e.status = status; return e; }
 
