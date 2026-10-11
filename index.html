@@ -47,6 +47,9 @@
   .sub { font-family: var(--display); font-weight: 800; text-transform: uppercase; letter-spacing: .04em; font-size: 18px; margin: 20px 0 8px; }
   .mvp { display: grid; grid-template-columns: 28px 1fr auto auto; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); align-items: baseline; }
   .mvp b { font-family: var(--display); font-size: 20px; }
+  .prow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+  .prow input { flex: 1; min-width: 130px; }
+  .prow button { white-space: nowrap; }
   .rnd { padding: 10px 0; border-bottom: 1px solid var(--line); }
 
   /* Ladder */
@@ -83,7 +86,6 @@
   .stamp { font-family: var(--display); font-weight: 800; text-transform: uppercase; letter-spacing: .06em; font-size: 14px; padding: 1px 8px; border-radius: 4px; border: 2px solid currentColor; display: inline-block; }
   .stamp.passed { color: var(--red); } .stamp.failed { color: var(--green); } .stamp.lapsed { color: var(--muted); }
 
-  details > summary { cursor: pointer; font-weight: 600; padding: 14px 16px; }
   #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 12px 18px; border-radius: 8px; max-width: calc(100% - 32px); display: none; z-index: 5; }
   #toast.bad { background: var(--red); }
   @media (max-width: 420px) { .row, .row3 { grid-template-columns: 1fr; } h1 { font-size: 30px; } }
@@ -104,7 +106,7 @@
     <form class="panel pad" id="signinForm">
       <div class="row">
         <div class="field"><label for="siName">Your name</label><select id="siName" required></select></div>
-        <div class="field"><label for="siPin">4-digit PIN</label><input id="siPin" type="password" inputmode="numeric" pattern="\d{4}" maxlength="4" autocomplete="off" required></div>
+        <div class="field"><label for="siPin" id="siPinLabel">4-digit PIN</label><input id="siPin" type="password" inputmode="numeric" pattern="\d{4}" maxlength="4" autocomplete="off" required></div>
       </div>
       <p class="meta" id="siHint" style="margin:0 0 12px"></p>
       <button type="submit">Sign in</button>
@@ -144,11 +146,9 @@
     <div class="panel" id="history"><div class="empty">Loading…</div></div>
   </section>
 
-  <section style="margin-top:32px">
-    <details class="panel" id="adminBox">
-      <summary>Admin</summary>
-      <div class="pad" style="padding-top:0" id="adminBody"></div>
-    </details>
+  <section id="adminSec" hidden>
+    <h2>Admin</h2>
+    <div class="panel pad" id="adminBody"></div>
   </section>
 </div>
 <div id="toast" role="status"></div>
@@ -158,18 +158,23 @@ const API = '/api/fines';
 const $ = (id) => document.getElementById(id);
 const money = (n) => new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: n % 1 ? 2 : 0 }).format(n);
 
-function store(kind, key, val) {
+function store(key, val) {
   try {
-    const s = kind === 'local' ? localStorage : sessionStorage;
-    if (val === undefined) return s.getItem(key);
-    if (val === null) s.removeItem(key); else s.setItem(key, val);
+    if (val === undefined) return localStorage.getItem(key);
+    if (val === null) localStorage.removeItem(key); else localStorage.setItem(key, val);
   } catch (e) { return null; }
 }
 
 let state = null;
-let me = null; try { me = JSON.parse(store('local', 'fines_me') || 'null'); } catch (e) {}
-let adminPin = store('session', 'fines_admin') || '';
-let myBog = null, adminBog = null, bogSig = '';
+// me is { id, pin } for a player, or { admin: true, pin } for the admin.
+let me = null; try { me = JSON.parse(store('fines_me') || 'null'); } catch (e) {}
+if (me && !me.admin && !me.id && me.name) me.id = me.name;   // sign-ins saved by the first version
+let myBog = null, adminBog = null, bogSig = '', adminSig = '';
+
+const isAdmin = () => !!(me && me.admin);
+const isPlayer = () => !!(me && !me.admin);
+const active = () => state.players.filter((p) => !p.removed);
+const nameOf = (id) => { const p = state.players.find((x) => x.id === id); return p ? p.name : 'Former player'; };
 
 // Tiny DOM builder: text is always inserted as text, never as HTML.
 function h(tag, attrs, ...kids) {
@@ -196,14 +201,14 @@ async function load() {
     if (!r.ok) throw new Error(data.error);
     state = data; render();
   } catch (e) {
-    if (!state) for (const id of ['ladder', 'open', 'history']) $(id).replaceChildren(h('div', { class: 'empty' }, "Can't reach the fines database. " + (e.message || '')));
+    if (!state) for (const id of ['ladder', 'open', 'history', 'bog']) $(id).replaceChildren(h('div', { class: 'empty' }, "Can't reach the fines database. " + (e.message || '')));
   }
 }
 
 async function post(action, body) {
   const r = await fetch(API, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, name: me && me.name, pin: me && me.pin, adminPin, ...body }),
+    body: JSON.stringify({ action, player: isPlayer() ? me.id : '', pin: isPlayer() ? me.pin : '', adminPin: isAdmin() ? me.pin : '', ...body }),
   });
   let data = {}; try { data = await r.json(); } catch (e) {}
   if (!r.ok) throw new Error(data.error || 'Something went wrong.');
@@ -218,6 +223,7 @@ async function run(btn, fn) {
   try { await fn(); } catch (e) { toast(e.message, true); }
   if (btn) btn.disabled = false;
 }
+const act = (action, body, msg) => (e) => run(e.currentTarget, async () => { await post(action, body); if (msg) toast(msg); });
 
 function timeLeft(deadline) {
   const ms = deadline - Date.now();
@@ -232,14 +238,14 @@ function pips(count, need) {
 }
 
 function fineCard(f) {
-  const need = state.config.votesNeeded;
-  const yes = Object.keys(f.votes).filter((p) => f.votes[p] === 'yes');
-  const no = Object.keys(f.votes).filter((p) => f.votes[p] === 'no');
+  const need = f.need;
+  const yes = Object.keys(f.votes).filter((p) => f.votes[p] === 'yes').map(nameOf);
+  const no = Object.keys(f.votes).filter((p) => f.votes[p] === 'no').map(nameOf);
   const open = f.status === 'open';
   const card = h('div', { class: 'fine' },
-    h('div', { class: 'fhead' }, h('span', { class: 't' }, f.target), h('span', { class: 'a' }, money(f.amount))),
+    h('div', { class: 'fhead' }, h('span', { class: 't' }, nameOf(f.target)), h('span', { class: 'a' }, money(f.amount))),
     h('div', { class: 'reason' }, f.reason),
-    h('div', { class: 'meta' }, 'Fined by ' + f.by + ' · ' + dateStr(f.createdAt) + (open ? ' · ' + timeLeft(f.deadline) : '')),
+    h('div', { class: 'meta' }, 'Fined by ' + nameOf(f.by) + ' · ' + dateStr(f.createdAt) + (open ? ' · ' + timeLeft(f.deadline) : '')),
     h('div', { class: 'tally' },
       h('span', { class: 'c-yes' }, 'Agree ' + yes.length + (open ? '/' + need : ''), open && pips(yes.length, need)),
       h('span', { class: 'c-no' }, 'Disagree ' + no.length + (open ? '/' + need : ''), open && pips(no.length, need))),
@@ -248,43 +254,60 @@ function fineCard(f) {
   const actions = h('div', { class: 'actions' });
   if (open) {
     if (!me) actions.append(h('span', { class: 'meta' }, 'Sign in to vote.'));
-    else if (f.target === me.name) actions.append(h('span', { class: 'meta' }, "This one's yours, so you sit this vote out."));
-    else if (f.votes[me.name]) actions.append(h('span', { class: 'meta' }, 'You voted ' + (f.votes[me.name] === 'yes' ? 'agree' : 'disagree') + '.'));
+    else if (isAdmin()) actions.append(h('span', { class: 'meta' }, 'Voting is open.'));
+    else if (f.target === me.id) actions.append(h('span', { class: 'meta' }, "This one's yours, so you sit this vote out."));
+    else if (f.votes[me.id]) actions.append(h('span', { class: 'meta' }, 'You voted ' + (f.votes[me.id] === 'yes' ? 'agree' : 'disagree') + '.'));
     else actions.append(
-      h('button', { class: 'yes', onclick: (e) => run(e.target, () => post('vote', { id: f.id, vote: 'yes' })) }, 'Agree'),
-      h('button', { class: 'no', onclick: (e) => run(e.target, () => post('vote', { id: f.id, vote: 'no' })) }, 'Disagree'));
+      h('button', { class: 'yes', onclick: act('vote', { id: f.id, vote: 'yes' }) }, 'Agree'),
+      h('button', { class: 'no', onclick: act('vote', { id: f.id, vote: 'no' }) }, 'Disagree'));
   } else {
     const label = { passed: 'Fined', failed: 'Let off', lapsed: 'Lapsed' }[f.status];
     actions.append(h('span', { class: 'stamp ' + f.status }, label));
   }
-  if (adminPin) actions.append(h('button', { class: 'danger', onclick: (e) => { if (confirm('Delete this fine for good?')) run(e.target, () => post('admin_delete', { id: f.id })); } }, 'Delete'));
+  if (isAdmin()) actions.append(
+    h('button', { class: 'ghost', onclick: (e) => {
+      const v = prompt('New amount in dollars for this fine:', String(f.amount));
+      if (v !== null && v.trim() !== '') act('admin_edit_fine', { id: f.id, amount: v.replace('$', '').trim() }, 'Amount updated.')(e);
+    } }, 'Change amount'),
+    h('button', { class: 'danger', onclick: (e) => { if (confirm('Delete this fine for good?')) act('admin_delete', { id: f.id }, 'Fine deleted.')(e); } }, 'Delete'));
   card.append(actions);
   return card;
 }
 
+// Rebuilds a dropdown only when its options change, keeping the current choice.
+function fillSelect(sel, options, placeholder) {
+  const sig = JSON.stringify(options);
+  if (sel.dataset.sig === sig) return;
+  sel.dataset.sig = sig;
+  const prev = sel.value;
+  sel.replaceChildren(h('option', { value: '' }, placeholder), ...options.map(([v, label]) => h('option', { value: v }, label)));
+  if (options.some(([v]) => v === prev)) sel.value = prev;
+}
+
 function render() {
   if (!state) return;
-  const names = state.players.map((p) => p.name);
-  if (me && !names.includes(me.name)) me = null;
+  const players = active();
+  if (isPlayer() && !players.some((p) => p.id === me.id)) { me = null; myBog = null; store('fines_me', null); }
+  const opts = players.map((p) => [p.id, p.name]);
 
   // Header + sign-in
-  $('who').replaceChildren(...(me ? [h('span', {}, 'Signed in as ', h('b', {}, me.name)), h('button', { class: 'ghost', onclick: signOut }, 'Switch')] : []));
+  $('who').replaceChildren(...(me ? [h('span', {}, 'Signed in as ', h('b', {}, isAdmin() ? 'Admin' : nameOf(me.id))), h('button', { class: 'ghost', onclick: signOut }, 'Switch')] : []));
   $('signin').hidden = !!me;
-  fillSelect($('siName'), names, 'Pick your name');
-  fillSelect($('fTarget'), names, 'Pick a player');
+  fillSelect($('siName'), state.config.adminEnabled ? [...opts, ['~admin', 'Admin']] : opts, 'Pick your name');
+  fillSelect($('fTarget'), opts, 'Pick a player');
   updateHint();
-  $('fineNote').textContent = me ? 'Voting stays open for ' + state.config.votingHours + ' hours.' : 'Sign in first.';
+  $('fineNote').textContent = isPlayer() ? 'Voting stays open for ' + state.config.votingHours + ' hours.' : isAdmin() ? 'Sign in as a player to write a fine.' : 'Sign in first.';
 
   // Ladder
-  const rows = names.map((n) => ({ name: n, total: 0, count: 0, pending: 0 }));
-  const by = Object.fromEntries(rows.map((r) => [r.name, r]));
+  const rows = players.map((p) => ({ id: p.id, name: p.name, total: 0, count: 0, pending: 0 }));
+  const by = Object.fromEntries(rows.map((r) => [r.id, r]));
   for (const f of state.fines) {
     if (!by[f.target]) continue;
     if (f.status === 'passed') { by[f.target].total += f.amount; by[f.target].count++; }
     if (f.status === 'open') by[f.target].pending += f.amount;
   }
   rows.sort((a, b) => b.total - a.total || b.count - a.count || a.name.localeCompare(b.name));
-  const pot = rows.reduce((s, r) => s + r.total, 0), max = rows[0].total || 1;
+  const pot = rows.reduce((s, r) => s + r.total, 0), max = (rows[0] && rows[0].total) || 1;
   let pos = 0, last = null;
   $('ladder').replaceChildren(
     h('div', { class: 'pot' }, h('span', {}, 'Team pot'), h('strong', {}, money(pot))),
@@ -301,38 +324,36 @@ function render() {
   // Open + decided
   const openFines = state.fines.filter((f) => f.status === 'open');
   const done = state.fines.filter((f) => f.status !== 'open');
-  const mine = me ? openFines.filter((f) => f.target !== me.name && !f.votes[me.name]).length : 0;
+  const mine = isPlayer() ? openFines.filter((f) => f.target !== me.id && !f.votes[me.id]).length : 0;
   $('openCount').textContent = openFines.length ? openFines.length + ' open' + (mine ? ' · ' + mine + ' waiting on you' : '') : '';
   $('open').replaceChildren(...(openFines.length ? openFines.map(fineCard) : [h('div', { class: 'empty' }, 'Nothing to vote on. Everyone is behaving, apparently.')]));
   $('history').replaceChildren(...(done.length ? done.map(fineCard) : [h('div', { class: 'empty' }, 'No fines decided yet.')]));
 
-  renderBog(names);
-  renderAdmin(names);
-  renderBogAdmin();
-}
-
-function fillSelect(sel, names, placeholder) {
-  if (sel.options.length) return;
-  sel.append(h('option', { value: '' }, placeholder), ...names.map((n) => h('option', { value: n }, n)));
+  renderBog(players);
+  renderAdmin();
 }
 
 function updateHint() {
-  const p = state && state.players.find((x) => x.name === $('siName').value);
-  $('siHint').textContent = !p ? '' : p.hasPin ? 'Enter the PIN you set earlier. Forgotten it? Ask the admin to reset it.' : 'First time: the PIN you enter now becomes your PIN. Remember it.';
+  const v = $('siName').value, admin = v === '~admin', pin = $('siPin');
+  $('siPinLabel').textContent = admin ? 'Admin code' : '4-digit PIN';
+  if (admin) { pin.removeAttribute('pattern'); pin.removeAttribute('maxlength'); pin.setAttribute('inputmode', 'text'); }
+  else { pin.setAttribute('pattern', '\\d{4}'); pin.setAttribute('maxlength', '4'); pin.setAttribute('inputmode', 'numeric'); }
+  const p = state && state.players.find((x) => x.id === v);
+  $('siHint').textContent = admin ? 'Enter the admin code.' : !p ? '' : p.hasPin ? 'Enter the PIN you set earlier. Forgotten it? Ask the admin to reset it.' : 'First time: the PIN you enter now becomes your PIN. Remember it.';
 }
 $('siName').addEventListener('change', updateHint);
 
-function signOut() { me = null; myBog = null; store('local', 'fines_me', null); render(); }
+function signOut() { me = null; myBog = null; adminBog = null; store('fines_me', null); render(); }
 
 $('signinForm').addEventListener('submit', (ev) => {
   ev.preventDefault();
-  const name = $('siName').value, pin = $('siPin').value;
+  const v = $('siName').value, pin = $('siPin').value;
   run(ev.submitter, async () => {
-    me = { name, pin };
+    me = v === '~admin' ? { admin: true, pin } : { id: v, pin };
     try {
-      const d = await post('login', {});
-      store('local', 'fines_me', JSON.stringify(me)); $('siPin').value = '';
-      toast(d.created ? 'PIN set. Welcome, ' + name + '.' : 'Signed in as ' + name + '.');
+      const d = await post(me.admin ? 'admin_check' : 'login', {});
+      store('fines_me', JSON.stringify(me)); $('siPin').value = '';
+      toast(me.admin ? 'Signed in as Admin.' : d.created ? 'PIN set. Welcome, ' + nameOf(v) + '.' : 'Signed in as ' + nameOf(v) + '.');
       render();
     } catch (e) { me = null; throw e; }
   });
@@ -340,56 +361,28 @@ $('signinForm').addEventListener('submit', (ev) => {
 
 $('fineForm').addEventListener('submit', (ev) => {
   ev.preventDefault();
-  if (!me) { toast('Sign in first.', true); $('signin').scrollIntoView({ behavior: 'smooth' }); return; }
+  if (!isPlayer()) { toast(isAdmin() ? 'Sign in as a player to write a fine.' : 'Sign in first.', true); return; }
   run(ev.submitter, async () => {
     await post('create', { target: $('fTarget').value, amount: $('fAmount').value, reason: $('fReason').value });
     ev.target.reset(); toast('Fine is up for a vote.');
   });
 });
 
-function renderAdmin(names) {
-  const body = $('adminBody');
-  if (body.dataset.mode === (adminPin ? 'in' : 'out')) return;
-  body.dataset.mode = adminPin ? 'in' : 'out';
-  if (!state.config.adminEnabled) { body.replaceChildren(h('p', { class: 'meta' }, 'Admin is switched off. Set an ADMIN_PIN environment variable in Vercel to turn it on.')); return; }
-  if (!adminPin) {
-    const input = h('input', { type: 'password', autocomplete: 'off', placeholder: 'Admin PIN', 'aria-label': 'Admin PIN' });
-    body.replaceChildren(h('form', { style: 'display:flex;gap:10px', onsubmit: (ev) => {
-      ev.preventDefault();
-      run(ev.submitter, async () => {
-        adminPin = input.value;
-        try { await post('admin_check', {}); store('session', 'fines_admin', adminPin); toast('Admin unlocked.'); render(); }
-        catch (e) { adminPin = ''; throw e; }
-      });
-    } }, input, h('button', { type: 'submit' }, 'Unlock')));
-    return;
-  }
-  const sel = h('select', { 'aria-label': 'Player' }, h('option', { value: '' }, 'Pick a player'), ...names.map((n) => h('option', { value: n }, n)));
-  body.replaceChildren(
-    h('p', { class: 'meta' }, 'Admin is unlocked: every fine now has a Delete button.'),
-    h('div', { id: 'bogAdmin' }),
-    h('div', { class: 'field' }, h('label', {}, "Reset a player's PIN (they set a new one next sign-in)"),
-      h('div', { style: 'display:flex;gap:10px' }, sel,
-        h('button', { onclick: (e) => { if (sel.value) run(e.target, async () => { await post('admin_reset_pin', { player: sel.value }); toast(sel.value + "'s PIN was reset."); }); } }, 'Reset'))),
-    h('div', { class: 'actions' },
-      h('button', { class: 'danger', onclick: (e) => { if (confirm('Wipe every fine, vote and best on ground result and start a new season? This cannot be undone.')) run(e.target, async () => { await post('admin_reset_season', {}); toast('New season. Ladder cleared.'); }); } }, 'Reset season'),
-      h('button', { class: 'ghost', onclick: () => { adminPin = ''; adminBog = null; store('session', 'fines_admin', null); render(); } }, 'Lock admin')));
-}
-
 // ---- Best on ground ------------------------------------------------------
-function renderBog(names) {
+function renderBog(players) {
   const rounds = (state.bogRounds || []).filter((r) => r.open);
-  const sig = JSON.stringify([rounds, me && me.name, myBog]);
+  const sig = JSON.stringify([rounds, me && (me.id || 'admin'), myBog, players]);
   if (sig === bogSig) return;   // don't wipe half-filled votes on the 20s refresh
   bogSig = sig;
   if (!rounds.length) { $('bog').replaceChildren(h('div', { class: 'empty' }, 'No game is open for votes right now.')); return; }
   $('bog').replaceChildren(...rounds.map((r) => {
     const card = h('div', { class: 'fine' }, h('div', { class: 'fhead' }, h('span', { class: 't' }, r.name)));
     if (!me) card.append(h('div', { class: 'meta' }, 'Sign in to vote.'));
+    else if (isAdmin()) card.append(h('div', { class: 'meta' }, 'Voting is open. Sign in as a player to vote.'));
     else if ((myBog || []).includes(r.id)) card.append(h('div', { class: 'meta' }, "Your votes are in. They can't be changed."));
     else {
-      const others = names.filter((n) => n !== me.name);
-      const pick = (label) => h('select', { 'aria-label': label, required: '' }, h('option', { value: '' }, 'Pick a player'), ...others.map((n) => h('option', { value: n }, n)));
+      const others = players.filter((p) => p.id !== me.id);
+      const pick = (label) => h('select', { 'aria-label': label, required: '' }, h('option', { value: '' }, 'Pick a player'), ...others.map((p) => h('option', { value: p.id }, p.name)));
       const sels = [pick('3 votes'), pick('2 votes'), pick('1 vote')];
       card.append(h('form', { style: 'margin-top:10px', onsubmit: (ev) => {
         ev.preventDefault();
@@ -405,41 +398,65 @@ function renderBog(names) {
   }));
 }
 
-function renderBogAdmin() {
-  const box = $('bogAdmin');
-  if (!box) return;
-  if (!adminBog) {
-    if (!box.dataset.loading) { box.dataset.loading = '1'; post('admin_bog', {}).catch((e) => toast(e.message, true)); }
-    return;
-  }
-  const sig = JSON.stringify(adminBog);
-  if (box.dataset.sig === sig) return;
-  box.dataset.sig = sig;
-  const input = h('input', { placeholder: 'Round 5 v Tigers', maxlength: '60', 'aria-label': 'Game name', required: '' });
-  const act = (action, body, msg) => (e) => run(e.target, async () => { await post(action, body); if (msg) toast(msg); });
+// ---- Admin screen (only shown when signed in as Admin) --------------------
+function renderAdmin() {
+  $('adminSec').hidden = !isAdmin();
+  if (!isAdmin()) { adminSig = ''; return; }
+  const sig = JSON.stringify([state.players, adminBog]);
+  if (sig === adminSig) return;   // don't wipe names being typed on the 20s refresh
+  adminSig = sig;
+  const body = $('adminBody');
+
+  const playerRows = state.players.map((p) => {
+    if (p.removed) return h('div', { class: 'prow' }, h('span', { class: 'meta', style: 'flex:1' }, p.name + ' (removed)'),
+      h('button', { class: 'ghost', onclick: act('admin_player_remove', { player: p.id }, p.name + ' is back in the team.') }, 'Restore'));
+    const input = h('input', { value: p.name, maxlength: '30', 'aria-label': 'Name for ' + p.name });
+    return h('div', { class: 'prow' }, input,
+      h('button', { class: 'ghost', onclick: (e) => act('admin_player_rename', { player: p.id, playerName: input.value }, 'Name saved.')(e) }, 'Save name'),
+      h('button', { class: 'ghost', onclick: act('admin_reset_pin', { player: p.id }, p.name + "'s PIN was reset.") }, 'Reset PIN'),
+      h('button', { class: 'danger', onclick: (e) => { if (confirm('Remove ' + p.name + ' from the team? Their past fines and votes are kept, and you can restore them later.')) act('admin_player_remove', { player: p.id }, p.name + ' removed.')(e); } }, 'Remove'));
+  });
+  const addInput = h('input', { placeholder: 'New player name', maxlength: '30', 'aria-label': 'New player name', required: '' });
+  const gameInput = h('input', { placeholder: 'Round 5 v Tigers', maxlength: '60', 'aria-label': 'Game name', required: '' });
+  const bog = adminBog || { rounds: [], leaderboard: [] };
   let pos = 0, last = null;
-  box.replaceChildren(
+
+  body.replaceChildren(
+    h('div', { class: 'sub', style: 'margin-top:0' }, 'Players'),
+    ...playerRows,
+    h('form', { class: 'prow', onsubmit: (ev) => { ev.preventDefault(); run(ev.submitter, async () => { await post('admin_player_add', { playerName: addInput.value }); toast('Player added.'); }); } },
+      addInput, h('button', { type: 'submit' }, 'Add player')),
+
+    h('div', { class: 'sub' }, 'Fines'),
+    h('p', { class: 'meta', style: 'margin:0' }, 'Every fine in the lists above now has Change amount and Delete buttons.'),
+
     h('div', { class: 'sub' }, 'Best on ground'),
-    h('form', { style: 'display:flex;gap:10px', onsubmit: (ev) => { ev.preventDefault(); run(ev.submitter, async () => { await post('admin_bog_open', { roundName: input.value }); toast('Voting is open.'); }); } },
-      input, h('button', { type: 'submit', style: 'white-space:nowrap' }, 'Open voting')),
+    h('form', { class: 'prow', onsubmit: (ev) => { ev.preventDefault(); run(ev.submitter, async () => { await post('admin_bog_open', { roundName: gameInput.value }); toast('Voting is open.'); }); } },
+      gameInput, h('button', { type: 'submit' }, 'Open voting')),
     h('div', { class: 'sub' }, 'MVP leaderboard ', h('button', { class: 'ghost', onclick: act('admin_bog', {}, 'Refreshed.') }, 'Refresh')),
-    h('p', { class: 'meta', style: 'margin:0 0 6px' }, 'Only visible here, with the admin PIN.'),
-    ...adminBog.leaderboard.map((p, i) => {
+    h('p', { class: 'meta', style: 'margin:0 0 6px' }, 'Only the admin can see this.'),
+    ...bog.leaderboard.map((p, i) => {
       if (p.points !== last) { pos = i + 1; last = p.points; }
       return h('div', { class: 'mvp' }, h('span', { class: 'meta' }, p.points ? String(pos) : '–'), h('span', {}, p.name),
         h('span', { class: 'meta' }, p.threes + '×3  ' + p.twos + '×2  ' + p.ones + '×1'), h('b', {}, String(p.points)));
     }),
     h('div', { class: 'sub' }, 'Games'),
-    ...(adminBog.rounds.length ? adminBog.rounds.map((r) => h('div', { class: 'rnd' },
+    ...(bog.rounds.length ? bog.rounds.map((r) => h('div', { class: 'rnd' },
       h('div', {}, h('b', {}, r.name), ' · ' + (r.open ? 'open' : 'closed') + ' · ' + r.voted.length + ' of ' + (r.voted.length + r.missing.length) + ' voted'),
       h('div', { class: 'meta' }, 'Voted: ' + (r.voted.join(', ') || 'nobody yet')),
       h('div', { class: 'meta' }, 'Still to vote: ' + (r.missing.join(', ') || 'nobody')),
       h('div', { class: 'actions' },
         h('button', { class: 'ghost', onclick: act('admin_bog_toggle', { id: r.id }) }, r.open ? 'Close voting' : 'Reopen voting'),
-        h('button', { class: 'danger', onclick: (e) => { if (confirm('Delete this game and its votes for good?')) act('admin_bog_delete', { id: r.id })(e); } }, 'Delete')))) : [h('p', { class: 'meta' }, 'No games yet.')]));
+        h('button', { class: 'danger', onclick: (e) => { if (confirm('Delete this game and its votes for good?')) act('admin_bog_delete', { id: r.id })(e); } }, 'Delete')))) : [h('p', { class: 'meta' }, 'No games yet.')]),
+
+    h('div', { class: 'sub' }, 'New season'),
+    h('button', { class: 'danger', onclick: (e) => { if (confirm('Wipe every fine, vote and best on ground result and start a new season? Players and PINs are kept. This cannot be undone.')) act('admin_reset_season', {}, 'New season. Ladder cleared.')(e); } }, 'Reset season'));
 }
 
-load().then(() => { if (me) post('bog_mine', {}).catch(() => {}); });
+load().then(() => {
+  if (isPlayer()) post('bog_mine', {}).catch(() => {});
+  if (isAdmin()) post('admin_bog', {}).catch((e) => { toast(e.message, true); signOut(); });
+});
 setInterval(load, 20000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
 </script>
