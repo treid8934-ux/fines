@@ -433,17 +433,19 @@ function renderAdmin() {
     h('div', { class: 'sub' }, 'Best on ground'),
     h('form', { class: 'prow', onsubmit: (ev) => { ev.preventDefault(); run(ev.submitter, async () => { await post('admin_bog_open', { roundName: gameInput.value }); toast('Voting is open.'); }); } },
       gameInput, h('button', { type: 'submit' }, 'Open voting')),
-    h('div', { class: 'sub' }, 'MVP leaderboard ', h('button', { class: 'ghost', onclick: act('admin_bog', {}, 'Refreshed.') }, 'Refresh')),
+    h('div', { class: 'sub' }, 'Season MVP leaderboard ', h('button', { class: 'ghost', onclick: act('admin_bog', {}, 'Refreshed.') }, 'Refresh')),
     h('p', { class: 'meta', style: 'margin:0 0 6px' }, 'Only the admin can see this.'),
     ...bog.leaderboard.map((p, i) => {
       if (p.points !== last) { pos = i + 1; last = p.points; }
       return h('div', { class: 'mvp' }, h('span', { class: 'meta' }, p.points ? String(pos) : '–'), h('span', {}, p.name),
         h('span', { class: 'meta' }, p.threes + '×3  ' + p.twos + '×2  ' + p.ones + '×1'), h('b', {}, String(p.points)));
     }),
-    h('div', { class: 'sub' }, 'Games'),
+    h('div', { class: 'sub' }, 'Game by game'),
     ...(bog.rounds.length ? bog.rounds.map((r) => h('div', { class: 'rnd' },
       h('div', {}, h('b', {}, r.name), ' · ' + (r.open ? 'open' : 'closed') + ' · ' + r.voted.length + ' of ' + (r.voted.length + r.missing.length) + ' voted'),
-      h('div', { class: 'meta' }, 'Voted: ' + (r.voted.join(', ') || 'nobody yet')),
+      ...(r.result.length ? r.result.map((p, i) => h('div', { class: 'mvp' }, h('span', { class: 'meta' }, String(r.result.findIndex((x) => x.points === p.points) + 1)), h('span', {}, p.name + (p.points === r.result[0].points ? ' · best on ground' : '')), h('span', {}), h('b', {}, String(p.points))))
+        : [h('div', { class: 'meta' }, 'No votes in yet.')]),
+      h('div', { class: 'meta', style: 'margin-top:6px' }, 'Voted: ' + (r.voted.join(', ') || 'nobody yet')),
       h('div', { class: 'meta' }, 'Still to vote: ' + (r.missing.join(', ') || 'nobody')),
       h('div', { class: 'actions' },
         h('button', { class: 'ghost', onclick: act('admin_bog_toggle', { id: r.id }) }, r.open ? 'Close voting' : 'Reopen voting'),

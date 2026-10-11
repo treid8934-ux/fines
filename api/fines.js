@@ -6,7 +6,7 @@ const crypto = require('crypto');
 // Admin code: type it between the quotes, e.g. 'magpies2026'. Use at least 6 characters.
 // Anyone who can read this file can read the code, so keep the GitHub repo PRIVATE.
 // While this is blank, the ADMIN_PIN setting in Vercel is used instead (if there is one).
-const ADMIN_CODE = '7303';
+const ADMIN_CODE = '';
 // Only used the very first time the site runs. After that, manage players from the Admin screen.
 const STARTING_PLAYERS = ['Ayrton', 'Greg', 'Louis', 'George', 'Spencer', 'Hamish', 'Manning', 'Reid', 'Luke', 'Jack'];
 const VOTING_HOURS = 48;   // fines not decided in this time lapse
@@ -159,18 +159,22 @@ async function bogAdmin(players) {
   const votes = toObj(votesRaw), active = activeOf(players);
   const tally = Object.fromEntries(active.map((p) => [p.id, { name: p.name, points: 0, threes: 0, twos: 0, ones: 0 }]));
   const rounds = parseAll(roundsRaw).sort((a, b) => b.createdAt - a.createdAt).map((r) => {
-    const voted = [], missing = [];
+    const voted = [], missing = [], game = {};
     for (const p of players) {
       const v = votes[r.id + '|' + p.id];
       if (!v) { if (!p.removed) missing.push(p.name); continue; }
       voted.push(p.name);
       parse(v).forEach((who, i) => {
+        game[who] = (game[who] || 0) + 3 - i;   // this game's own count
         if (!tally[who]) return;
         tally[who].points += 3 - i;
         tally[who][['threes', 'twos', 'ones'][i]]++;
       });
     }
-    return { ...r, voted, missing };
+    const nameOf = (id) => (players.find((p) => p.id === id) || { name: 'Former player' }).name;
+    const result = Object.entries(game).map(([id, points]) => ({ name: nameOf(id), points }))
+      .sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+    return { ...r, voted, missing, result };
   });
   const leaderboard = Object.values(tally).sort((a, b) =>
     b.points - a.points || b.threes - a.threes || b.twos - a.twos || a.name.localeCompare(b.name));
