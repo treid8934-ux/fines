@@ -4,91 +4,138 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Richmond Royal's Fines Ladder</title>
+<meta name="theme-color" content="#123B2C">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Barlow:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f3efe6; --card: #fffdf8; --ink: #16181d; --muted: #6b6f76; --line: #ddd6c6;
-    --yellow: #f5c518; --red: #d7263d; --green: #1f8a4c;
-    --display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+    /* Club rooms palette */
+    --green-d: #123B2C; --board: #0B1F17; --board-line: #2A5A45; --board-text: #F7E7B8; --board-dim: #8FB8A3;
+    --bg: #F3EBDB; --card: #FFFBF2; --ink: #14261E; --muted: #55625A; --line: #DCCFB5;
+    --yellow: #F2B33D; --red: #B83A28; --green: #1E7046;
+    --display: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
     --body: 'Barlow', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --mono: 'Share Tech Mono', ui-monospace, monospace;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.4; }
-  .wrap { max-width: 720px; margin: 0 auto; padding: 0 16px 64px; }
+  [hidden] { display: none !important; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; animation: none !important; } }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.45; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 16px 64px; }
+  body.wide .wrap, .wide-wrap { max-width: 1160px; margin: 0 auto; padding: 0 20px; }
 
-  header { background: var(--ink); color: #fff; }
-  header .wrap { padding: 20px 16px 18px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-  .cardicon { width: 26px; height: 36px; background: var(--yellow); border-radius: 4px; transform: rotate(-10deg); flex: none; box-shadow: 8px 3px 0 -1px var(--red); }
-  h1 { font-family: var(--display); font-weight: 800; font-size: 36px; letter-spacing: .02em; text-transform: uppercase; margin: 0; line-height: 1; flex: 1; }
-  .who { font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  header { background: var(--green-d); color: var(--bg); border-bottom: 2px solid rgba(243,235,219,.12); }
+  header .wrap { padding: 16px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; color: inherit; flex: 1; min-width: 0; }
+  .logo { width: 44px; height: 44px; flex: none; }
+  .brandname { font-family: var(--display); font-weight: 900; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--yellow); line-height: 1; }
+  h1 { font-family: var(--display); font-weight: 900; font-size: 30px; letter-spacing: .02em; text-transform: uppercase; margin: 2px 0 0; line-height: 1; overflow-wrap: anywhere; }
+  .stripes { height: 10px; background: repeating-linear-gradient(90deg, var(--red) 0 80px, var(--yellow) 80px 160px, var(--bg) 160px 240px); }
+  .banner { background: var(--red); color: #fff; padding: 10px 16px; font-weight: 600; text-align: center; }
+  a { color: inherit; }
+  .who { font-size: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .who b { color: var(--yellow); }
+  header button.ghost { color: var(--bg); }
 
-  h2 { font-family: var(--display); font-weight: 800; font-size: 24px; text-transform: uppercase; letter-spacing: .03em; margin: 32px 0 10px; display: flex; align-items: baseline; gap: 10px; }
+  h2 { font-family: var(--display); font-weight: 900; font-size: 30px; text-transform: uppercase; letter-spacing: .02em; margin: 36px 0 12px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; color: var(--green-d); line-height: 1; }
   h2 small { font-family: var(--body); font-weight: 500; font-size: 14px; color: var(--muted); text-transform: none; letter-spacing: 0; }
-  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
-  .pad { padding: 16px; }
-  .empty { color: var(--muted); padding: 16px; font-size: 15px; }
+  .panel { background: var(--card); border: 2px solid var(--line); border-radius: 10px; }
+  .pad { padding: 18px; }
+  .empty { color: var(--muted); padding: 18px; font-size: 15px; }
 
   button, select, input, textarea { font: inherit; color: inherit; }
-  button { cursor: pointer; border: 0; border-radius: 8px; padding: 10px 14px; font-weight: 600; background: var(--ink); color: #fff; }
+  button { cursor: pointer; border: 0; border-radius: 8px; padding: 11px 16px; font-weight: 700; background: var(--green-d); color: var(--bg); min-height: 44px; }
+  button:hover { background: #1A4D3A; }
   button:disabled { opacity: .5; cursor: default; }
-  button.ghost { background: transparent; color: inherit; border: 1px solid currentColor; padding: 6px 10px; font-size: 14px; }
-  button.yes { background: var(--green); } button.no { background: var(--red); }
-  button.danger { background: transparent; color: var(--red); border: 1px solid var(--red); padding: 6px 10px; font-size: 13px; }
-  button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3px solid var(--yellow); outline-offset: 2px; }
-  label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
-  select, input, textarea { width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  button.ghost { background: transparent; color: inherit; border: 2px solid currentColor; padding: 7px 12px; font-size: 14px; }
+  button.ghost:hover { background: rgba(20,38,30,.06); }
+  button.yes { background: var(--green); color: #fff; } button.no { background: var(--red); color: #fff; }
+  button.danger { background: transparent; color: var(--red); border: 2px solid var(--red); padding: 7px 12px; font-size: 13px; }
+  button.amber, .btn-amber { background: var(--yellow); color: var(--green-d); }
+  button.amber:hover { background: #F5C15E; }
+  button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible, a:focus-visible { outline: 3px solid var(--yellow); outline-offset: 2px; }
+  label { display: block; font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+  select, input, textarea { width: 100%; padding: 11px; border: 2px solid var(--line); border-radius: 8px; background: #fff; min-height: 44px; }
   textarea { resize: vertical; min-height: 64px; }
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .field { margin-bottom: 12px; }
   .row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-  .sub { font-family: var(--display); font-weight: 800; text-transform: uppercase; letter-spacing: .04em; font-size: 18px; margin: 20px 0 8px; }
-  .mvp { display: grid; grid-template-columns: 28px 1fr auto auto; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); align-items: baseline; }
-  .mvp b { font-family: var(--display); font-size: 20px; }
+  .sub { font-family: var(--display); font-weight: 900; text-transform: uppercase; letter-spacing: .04em; font-size: 22px; margin: 26px 0 8px; color: var(--green-d); }
+  .mvp { display: grid; grid-template-columns: 28px 1fr auto auto; gap: 10px; padding: 7px 0; border-bottom: 1px dashed var(--line); align-items: baseline; }
+  .mvp b { font-family: var(--mono); font-size: 20px; }
   .prow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
   .prow input { flex: 1; min-width: 130px; }
   .prow button { white-space: nowrap; }
-  .rnd { padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .ticks { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px 12px; }
+  .tick { display: flex; gap: 8px; align-items: center; font-size: 15px; color: var(--ink); font-weight: 500; margin: 0; cursor: pointer; text-transform: none; letter-spacing: 0; }
+  .tick input { width: auto; margin: 0; min-height: 0; }
+  .payrow { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; padding: 12px 18px; border-bottom: 1px dashed var(--line); }
+  .owe { color: var(--red); } .paidup { color: var(--green); }
+  .split { display: flex; justify-content: space-between; gap: 12px; }
+  .chip { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 4px; border: 2px solid currentColor; margin-left: 8px; vertical-align: 2px; text-transform: uppercase; letter-spacing: .04em; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0; }
+  .stat { background: var(--bg); border: 2px dashed var(--line); border-radius: 6px; padding: 8px 10px; }
+  .stat b { display: block; font-family: var(--mono); font-size: 22px; line-height: 1.15; }
+  .stat span { font-size: 12px; color: var(--muted); }
+  #app.is-pending > section:not(#pendingSec) { display: none !important; }
+  .price { font-family: var(--mono); font-size: 26px; margin: 4px 0 14px; color: var(--green-d); }
+  .price s { color: var(--muted); margin-right: 8px; }
+  .navlink { color: var(--bg); text-decoration: none; font-weight: 600; padding: 8px 6px; }
+  .ghostlink { color: var(--bg); text-decoration: none; border: 2px solid var(--bg); border-radius: 8px; padding: 8px 14px; font-weight: 700; }
+  .cta { background: var(--yellow); color: var(--green-d); text-decoration: none; border-radius: 8px; padding: 10px 16px; font-weight: 700; display: inline-block; }
+  .cta:hover { background: #F5C15E; }
+  .rnd { padding: 12px 0; border-bottom: 1px dashed var(--line); }
 
-  /* Ladder */
-  .pot { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 16px; border-bottom: 2px solid var(--ink); }
-  .pot span { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-  .pot strong { font-family: var(--display); font-weight: 800; font-size: 34px; line-height: 1; }
-  .rung { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); position: relative; }
+  /* Ladder: the scoreboard */
+  #ladder { background: var(--board); border: 6px solid var(--board-line); border-radius: 12px; color: var(--board-text); overflow: hidden; }
+  #ladder .empty { color: var(--board-dim); }
+  .pot { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 18px; border-bottom: 2px dashed var(--board-line); }
+  .pot span { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .pot strong { font-family: var(--mono); font-weight: 400; font-size: 32px; line-height: 1; }
+  #ladder .pot span { color: var(--board-dim); }
+  #ladder .pot strong { color: var(--yellow); }
+  .rung { display: grid; grid-template-columns: 38px 1fr auto; gap: 10px; align-items: center; padding: 11px 18px; border-bottom: 1px solid #1D3F31; position: relative; }
   .rung:last-child { border-bottom: 0; }
-  .rung .bar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--yellow); opacity: .22; pointer-events: none; }
+  .rung .bar { position: absolute; left: 0; top: 0; bottom: 0; background: var(--yellow); opacity: .10; pointer-events: none; }
   .rung > * { position: relative; }
-  .pos { font-family: var(--display); font-weight: 800; font-size: 22px; color: var(--muted); text-align: center; }
-  .rung.top .pos { background: var(--yellow); color: var(--ink); border-radius: 4px; }
-  .pname { font-weight: 600; font-size: 17px; }
+  .pos { font-family: var(--mono); font-size: 22px; color: var(--yellow); text-align: center; }
+  .rung.top .pos { background: var(--yellow); color: var(--board); border-radius: 4px; }
+  .pname { font-weight: 700; font-size: 17px; text-transform: uppercase; letter-spacing: .03em; }
   .pmeta { font-size: 13px; color: var(--muted); }
-  .ptotal { font-family: var(--display); font-weight: 800; font-size: 24px; font-variant-numeric: tabular-nums; }
-  .rung.zero .ptotal { color: var(--muted); font-weight: 600; }
+  #ladder .pmeta { color: var(--board-dim); }
+  .ptotal { font-family: var(--mono); font-size: 24px; font-variant-numeric: tabular-nums; }
+  .rung.zero .ptotal { color: var(--board-dim); }
+  #payments .ptotal { font-size: 20px; }
 
   /* Fine cards */
-  .fine { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .fine { padding: 16px 18px; border-bottom: 1px dashed var(--line); }
   .fine:last-child { border-bottom: 0; }
   .fhead { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
-  .fhead .t { font-weight: 600; font-size: 18px; }
-  .fhead .a { font-family: var(--display); font-weight: 800; font-size: 26px; white-space: nowrap; }
-  .reason { margin: 4px 0 8px; overflow-wrap: anywhere; }
+  .fhead .t { font-weight: 700; font-size: 19px; }
+  .fhead .a { font-family: var(--display); font-weight: 900; font-size: 32px; white-space: nowrap; color: var(--green-d); }
+  .reason { margin: 4px 0 8px; overflow-wrap: anywhere; font-size: 17px; }
   .meta { font-size: 13px; color: var(--muted); }
-  .tally { display: flex; gap: 14px; margin: 10px 0 6px; font-size: 14px; font-weight: 600; flex-wrap: wrap; }
-  .pips { display: inline-flex; gap: 3px; vertical-align: middle; margin-left: 6px; }
-  .pip { width: 12px; height: 12px; border-radius: 2px; border: 1.5px solid currentColor; }
+  .tally { display: flex; gap: 14px; margin: 10px 0 6px; font-size: 14px; font-weight: 700; flex-wrap: wrap; }
+  .pips { display: inline-flex; gap: 4px; vertical-align: middle; margin-left: 6px; }
+  .pip { width: 14px; height: 14px; border-radius: 3px; border: 2px solid currentColor; }
   .pip.on { background: currentColor; }
   .c-yes { color: var(--green); } .c-no { color: var(--red); }
   .voters { font-size: 13px; color: var(--muted); }
   .actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; align-items: center; }
   .actions button.yes, .actions button.no { flex: 1; min-width: 120px; padding: 12px; }
-  .stamp { font-family: var(--display); font-weight: 800; text-transform: uppercase; letter-spacing: .06em; font-size: 14px; padding: 1px 8px; border-radius: 4px; border: 2px solid currentColor; display: inline-block; }
+  .stamp { font-family: var(--display); font-weight: 900; text-transform: uppercase; letter-spacing: .08em; font-size: 16px; padding: 2px 10px; border-radius: 4px; border: 3px solid currentColor; display: inline-block; transform: rotate(-3deg); }
   .stamp.passed { color: var(--red); } .stamp.failed { color: var(--green); } .stamp.lapsed { color: var(--muted); }
 
-  #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 12px 18px; border-radius: 8px; max-width: calc(100% - 32px); display: none; z-index: 5; }
-  #toast.bad { background: var(--red); }
-  @media (max-width: 420px) { .row, .row3 { grid-template-columns: 1fr; } h1 { font-size: 30px; } }
+  #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--green-d); color: var(--bg); padding: 12px 18px; border-radius: 8px; max-width: calc(100% - 32px); display: none; z-index: 50; font-weight: 600; box-shadow: 0 6px 0 -2px var(--board); }
+  #toast.bad { background: var(--red); color: #fff; }
+  @media (max-width: 480px) { .row, .row3 { grid-template-columns: 1fr; } h1 { font-size: 26px; } .stats { grid-template-columns: repeat(2, 1fr); } }
+
+
+  .cardicon { width: 26px; height: 36px; background: var(--yellow); border-radius: 4px; transform: rotate(-10deg); flex: none; box-shadow: 8px 3px 0 -1px var(--red); margin-right: 6px; }
+  header h1 { flex: 1 1 200px; min-width: 0; color: var(--bg); overflow-wrap: normal; }
+  @media (max-width: 480px) { header h1 { font-size: 24px; } }
 </style>
 </head>
 <body>
@@ -99,6 +146,7 @@
     <div class="who" id="who"></div>
   </div>
 </header>
+<div class="stripes" aria-hidden="true"></div>
 
 <div class="wrap">
   <section id="signin" hidden>
@@ -225,12 +273,11 @@ async function run(btn, fn) {
 }
 const act = (action, body, msg) => (e) => run(e.currentTarget, async () => { await post(action, body); if (msg) toast(msg); });
 
-function timeLeft(deadline) {
-  const ms = deadline - Date.now();
-  if (ms <= 0) return 'closing';
-  const hrs = Math.floor(ms / 3600000), mins = Math.floor((ms % 3600000) / 60000);
-  return hrs >= 1 ? hrs + 'h ' + mins + 'm left' : mins + 'm left';
+function openFor(since) {
+  const hrs = Math.floor((Date.now() - since) / 3600000);
+  return hrs < 1 ? 'just opened' : hrs < 48 ? 'open ' + hrs + 'h' : 'open ' + Math.floor(hrs / 24) + ' days';
 }
+const lineupIds = (r) => r.playing || active().map((p) => p.id);
 const dateStr = (ts) => new Date(ts).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
 
 function pips(count, need) {
@@ -245,7 +292,7 @@ function fineCard(f) {
   const card = h('div', { class: 'fine' },
     h('div', { class: 'fhead' }, h('span', { class: 't' }, nameOf(f.target)), h('span', { class: 'a' }, money(f.amount))),
     h('div', { class: 'reason' }, f.reason),
-    h('div', { class: 'meta' }, 'Fined by ' + nameOf(f.by) + ' · ' + dateStr(f.createdAt) + (open ? ' · ' + timeLeft(f.deadline) : '')),
+    h('div', { class: 'meta' }, 'Fined by ' + nameOf(f.by) + ' · ' + dateStr(f.createdAt) + (open ? ' · ' + openFor(f.createdAt) : '') + (f.closedAt && !open ? ' · voting closed by admin' : '')),
     h('div', { class: 'tally' },
       h('span', { class: 'c-yes' }, 'Agree ' + yes.length + (open ? '/' + need : ''), open && pips(yes.length, need)),
       h('span', { class: 'c-no' }, 'Disagree ' + no.length + (open ? '/' + need : ''), open && pips(no.length, need))),
@@ -264,6 +311,10 @@ function fineCard(f) {
     const label = { passed: 'Fined', failed: 'Let off', lapsed: 'Lapsed' }[f.status];
     actions.append(h('span', { class: 'stamp ' + f.status }, label));
   }
+  if (isAdmin() && open) actions.append(h('button', { class: 'ghost', onclick: (e) => {
+    const outcome = yes.length > no.length ? 'FINED' : 'LET OFF';
+    if (confirm('Close voting on this fine now?\n\nIt\'s decided on the votes so far (' + yes.length + ' agree, ' + no.length + ' disagree), so ' + nameOf(f.target) + ' will be ' + outcome + '.')) act('admin_close_fine', { id: f.id }, 'Voting closed: ' + outcome.toLowerCase() + '.')(e);
+  } }, 'Close voting'));
   if (isAdmin()) actions.append(
     h('button', { class: 'ghost', onclick: (e) => {
       const v = prompt('New amount in dollars for this fine:', String(f.amount));
@@ -293,10 +344,10 @@ function render() {
   // Header + sign-in
   $('who').replaceChildren(...(me ? [h('span', {}, 'Signed in as ', h('b', {}, isAdmin() ? 'Admin' : nameOf(me.id))), h('button', { class: 'ghost', onclick: signOut }, 'Switch')] : []));
   $('signin').hidden = !!me;
-  fillSelect($('siName'), state.config.adminEnabled ? [...opts, ['~admin', 'Admin']] : opts, 'Pick your name');
+  fillSelect($('siName'), [...opts, ['~admin', 'Admin']], 'Pick your name');
   fillSelect($('fTarget'), opts, 'Pick a player');
   updateHint();
-  $('fineNote').textContent = isPlayer() ? 'Voting stays open for ' + state.config.votingHours + ' hours.' : isAdmin() ? 'Sign in as a player to write a fine.' : 'Sign in first.';
+  $('fineNote').textContent = isPlayer() ? 'Voting stays open until the team decides, or the admin closes it.' : isAdmin() ? 'Sign in as a player to write a fine.' : 'Sign in first.';
 
   // Ladder
   const rows = players.map((p) => ({ id: p.id, name: p.name, total: 0, count: 0, pending: 0 }));
@@ -380,8 +431,9 @@ function renderBog(players) {
     if (!me) card.append(h('div', { class: 'meta' }, 'Sign in to vote.'));
     else if (isAdmin()) card.append(h('div', { class: 'meta' }, 'Voting is open. Sign in as a player to vote.'));
     else if ((myBog || []).includes(r.id)) card.append(h('div', { class: 'meta' }, "Your votes are in. They can't be changed."));
+    else if (!lineupIds(r).includes(me.id)) card.append(h('div', { class: 'meta' }, "You weren't in the lineup for this game, so you don't vote in it."));
     else {
-      const others = players.filter((p) => p.id !== me.id);
+      const others = players.filter((p) => lineupIds(r).includes(p.id));   // everyone who played, yourself included
       const pick = (label) => h('select', { 'aria-label': label, required: '' }, h('option', { value: '' }, 'Pick a player'), ...others.map((p) => h('option', { value: p.id }, p.name)));
       const sels = [pick('3 votes'), pick('2 votes'), pick('1 vote')];
       card.append(h('form', { style: 'margin-top:10px', onsubmit: (ev) => {
@@ -398,11 +450,22 @@ function renderBog(players) {
   }));
 }
 
+// Tick boxes for who played; returns the element and a way to read the ticks.
+function lineupPicker(selected) {
+  const set = new Set(selected);
+  const boxes = active().map((p) => {
+    const cb = h('input', { type: 'checkbox', value: p.id });
+    cb.checked = set.has(p.id);
+    return { cb, el: h('label', { class: 'tick' }, cb, p.name) };
+  });
+  return { el: h('div', { class: 'ticks' }, ...boxes.map((b) => b.el)), value: () => boxes.filter((b) => b.cb.checked).map((b) => b.cb.value) };
+}
+
 // ---- Admin screen (only shown when signed in as Admin) --------------------
 function renderAdmin() {
   $('adminSec').hidden = !isAdmin();
   if (!isAdmin()) { adminSig = ''; return; }
-  const sig = JSON.stringify([state.players, adminBog]);
+  const sig = JSON.stringify([state.players, adminBog, state.bogRounds]);
   if (sig === adminSig) return;   // don't wipe names being typed on the 20s refresh
   adminSig = sig;
   const body = $('adminBody');
@@ -419,20 +482,33 @@ function renderAdmin() {
   const addInput = h('input', { placeholder: 'New player name', maxlength: '30', 'aria-label': 'New player name', required: '' });
   const gameInput = h('input', { placeholder: 'Round 5 v Tigers', maxlength: '60', 'aria-label': 'Game name', required: '' });
   const bog = adminBog || { rounds: [], leaderboard: [] };
+  const lastRound = (state.bogRounds || [])[0];
+  const newLineup = lineupPicker(lastRound ? lineupIds(lastRound) : active().map((p) => p.id));
+  const link = location.origin + '/';
+  const linkInput = h('input', { value: link, readonly: '', 'aria-label': 'Team link' });
+  const codeInput = h('input', { type: 'password', placeholder: 'New admin code (6+ characters)', minlength: '6', autocomplete: 'new-password', 'aria-label': 'New admin code', required: '' });
   let pos = 0, last = null;
 
   body.replaceChildren(
-    h('div', { class: 'sub', style: 'margin-top:0' }, 'Players'),
+    h('div', { class: 'sub', style: 'margin-top:0' }, 'Share with the team'),
+    h('div', { class: 'prow' }, linkInput,
+      h('button', { onclick: async () => { try { await navigator.clipboard.writeText(link); toast('Link copied.'); } catch (e) { linkInput.select(); toast('Select the link and copy it.'); } } }, 'Copy link')),
+    h('p', { class: 'meta', style: 'margin:0' }, 'Each player picks their name and sets a PIN the first time.'),
+
+    h('div', { class: 'sub' }, 'Players'),
     ...playerRows,
     h('form', { class: 'prow', onsubmit: (ev) => { ev.preventDefault(); run(ev.submitter, async () => { await post('admin_player_add', { playerName: addInput.value }); toast('Player added.'); }); } },
       addInput, h('button', { type: 'submit' }, 'Add player')),
 
     h('div', { class: 'sub' }, 'Fines'),
-    h('p', { class: 'meta', style: 'margin:0' }, 'Every fine in the lists above now has Change amount and Delete buttons.'),
+    h('p', { class: 'meta', style: 'margin:0' }, 'Every fine in the lists above has Change amount and Delete buttons. Open fines also have Close voting, which decides the fine on the votes cast so far.'),
 
     h('div', { class: 'sub' }, 'Best on ground'),
-    h('form', { class: 'prow', onsubmit: (ev) => { ev.preventDefault(); run(ev.submitter, async () => { await post('admin_bog_open', { roundName: gameInput.value }); toast('Voting is open.'); }); } },
-      gameInput, h('button', { type: 'submit' }, 'Open voting')),
+    h('form', { onsubmit: (ev) => { ev.preventDefault(); run(ev.submitter, async () => { await post('admin_bog_open', { roundName: gameInput.value, playing: newLineup.value() }); toast('Voting is open.'); }); } },
+      h('div', { class: 'prow' }, gameInput),
+      h('p', { class: 'meta', style: 'margin:4px 0 8px' }, lastRound ? 'Who played? Copied from ' + lastRound.name + ', so just change who was in or out.' : 'Who played? Untick anyone who missed the game.'),
+      newLineup.el,
+      h('button', { type: 'submit', style: 'margin-top:10px' }, 'Open voting')),
     h('div', { class: 'sub' }, 'Season MVP leaderboard ', h('button', { class: 'ghost', onclick: act('admin_bog', {}, 'Refreshed.') }, 'Refresh')),
     h('p', { class: 'meta', style: 'margin:0 0 6px' }, 'Only the admin can see this.'),
     ...bog.leaderboard.map((p, i) => {
@@ -447,9 +523,23 @@ function renderAdmin() {
         : [h('div', { class: 'meta' }, 'No votes in yet.')]),
       h('div', { class: 'meta', style: 'margin-top:6px' }, 'Voted: ' + (r.voted.join(', ') || 'nobody yet')),
       h('div', { class: 'meta' }, 'Still to vote: ' + (r.missing.join(', ') || 'nobody')),
+      (() => {
+        const lp = lineupPicker(lineupIds(r));
+        return h('details', { style: 'margin-top:6px' }, h('summary', { class: 'meta', style: 'cursor:pointer' }, 'Edit who played'),
+          h('div', { style: 'margin-top:8px' }, lp.el),
+          h('button', { class: 'ghost', style: 'margin-top:8px', onclick: (e) => act('admin_bog_lineup', { id: r.id, playing: lp.value() }, 'Lineup saved.')(e) }, 'Save lineup'));
+      })(),
       h('div', { class: 'actions' },
         h('button', { class: 'ghost', onclick: act('admin_bog_toggle', { id: r.id }) }, r.open ? 'Close voting' : 'Reopen voting'),
         h('button', { class: 'danger', onclick: (e) => { if (confirm('Delete this game and its votes for good?')) act('admin_bog_delete', { id: r.id })(e); } }, 'Delete')))) : [h('p', { class: 'meta' }, 'No games yet.')]),
+
+    h('div', { class: 'sub' }, 'Admin code'),
+    h('form', { class: 'prow', onsubmit: (ev) => { ev.preventDefault(); run(ev.submitter, async () => {
+      const code = codeInput.value;
+      await post('admin_change_code', { newCode: code });
+      me.pin = code; store('fines_me', JSON.stringify(me)); codeInput.value = ''; toast('Admin code changed.');
+    }); } }, codeInput, h('button', { type: 'submit' }, 'Change code')),
+    h('p', { class: 'meta', style: 'margin:0' }, 'The old code stops working straight away. Keep the new one somewhere safe.'),
 
     h('div', { class: 'sub' }, 'New season'),
     h('button', { class: 'danger', onclick: (e) => { if (confirm('Wipe every fine, vote and best on ground result and start a new season? Players and PINs are kept. This cannot be undone.')) act('admin_reset_season', {}, 'New season. Ladder cleared.')(e); } }, 'Reset season'));

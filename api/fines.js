@@ -3,23 +3,23 @@
 const crypto = require('crypto');
 
 // ---- Settings you can change -------------------------------------------
-// Admin code: type it between the quotes, e.g. 'magpies2026'. Use at least 6 characters.
-// Anyone who can read this file can read the code, so keep the GitHub repo PRIVATE.
+// Starting admin code. Once the admin changes the code from the Admin screen, the new code
+// is stored (scrambled) in the database and this one stops working.
 // While this is blank, the ADMIN_PIN setting in Vercel is used instead (if there is one).
 const ADMIN_CODE = '';
 // Only used the very first time the site runs. After that, manage players from the Admin screen.
 const STARTING_PLAYERS = ['Ayrton', 'Greg', 'Louis', 'George', 'Spencer', 'Hamish', 'Manning', 'Reid', 'Luke', 'Jack'];
-const VOTING_HOURS = 48;   // fines not decided in this time lapse
 const MAX_FINE = 500;      // biggest single fine allowed, in dollars
+// Fines have no time limit: they stay open until the team decides, or the admin closes voting.
 // -------------------------------------------------------------------------
 
 const DB_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
 const DB_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 const K = {
   players: 'fines:players', pins: 'fines:pins', fines: 'fines:fines', votes: 'fines:votes', fail: 'fines:fail:',
-  bogRounds: 'fines:bog:rounds', bogVotes: 'fines:bog:votes',
+  bogRounds: 'fines:bog:rounds', bogVotes: 'fines:bog:votes', admin: 'fines:admin',
 };
-const adminCode = () => String(ADMIN_CODE || process.env.ADMIN_PIN || '7303');
+const startingAdminCode = () => String(ADMIN_CODE || process.env.ADMIN_PIN || '7303');
 
 function err(status, message) { const e = new Error(message); e.status = status; return e; }
 
@@ -107,13 +107,23 @@ async function signIn(players, id, pin, allowCreate) {
   return false;
 }
 
+// Uses the code saved from the Admin screen if there is one, otherwise the starting code above.
 async function requireAdmin(code) {
-  const real = adminCode();
-  if (!real) throw err(403, 'Admin is switched off. Set ADMIN_CODE at the top of api/fines.js.');
   await throttle('~admin');
-  const a = crypto.createHash('sha256').update(String(code || '')).digest();
-  const b = crypto.createHash('sha256').update(real).digest();
-  if (!crypto.timingSafeEqual(a, b)) { await recordFail('~admin'); throw err(401, 'Wrong admin code.'); }
+  const [stored] = await redis([['GET', K.admin]]);
+  let ok;
+  if (stored) ok = verifyPin(String(code || ''), stored);
+  else {
+    const a = crypto.createHash('sha256').update(String(code || '')).digest();
+    const b = crypto.createHash('sha256').update(startingAdminCode()).digest();
+    ok = crypto.timingSafeEqual(a, b);
+  }
+  if (!ok) { await recordFail('~admin'); throw err(401, 'Wrong admin code.'); }
+}
+function cleanAdminCode(value) {
+  const code = String(value || '');
+  if (code.length < 6 || code.length > 100) throw err(400, 'The admin code needs at least 6 characters.');
+  return code;
 }
 
 // ---- Fines ---------------------------------------------------------------
@@ -123,8 +133,23 @@ function statusOf(fine, votes, now) {
   for (const v of Object.values(votes)) v === 'yes' ? yes++ : no++;
   if (yes >= need) return 'passed';
   if (no >= need) return 'failed';
-  if (now > fine.deadline) return 'lapsed';
+  if (fine.closed) return fine.closed;   // closed by the admin, or lapsed under the old time limit
+  if (fine.deadline && now > fine.deadline) return 'lapsed';   // old fines only; settled by settleOldFines
   return 'open';
+}
+
+// Fines written before the time limit was removed still carry a deadline. The first time the
+// new version sees one, it either locks it in as lapsed (deadline already passed) or drops the
+// deadline so it stays open until the team decides.
+async function settleOldFines(fines, allVotes, players, now) {
+  const cmds = [];
+  for (const f of fines) {
+    if (!f.deadline) continue;
+    if (statusOf(f, votesFor(f, allVotes, players), now) === 'lapsed') f.closed = 'lapsed';
+    delete f.deadline;
+    cmds.push(['HSET', K.fines, f.id, JSON.stringify(f)]);
+  }
+  if (cmds.length) await redis(cmds);
 }
 function votesFor(fine, allVotes, players) {
   const votes = {};
@@ -153,16 +178,24 @@ async function getRound(id) {
   if (!raw) throw err(404, 'That game no longer exists.');
   return parse(raw);
 }
+// Who played in a game. Games from before lineups existed count everyone.
+const lineupOf = (round, players) => round.playing || activeOf(players).map((p) => p.id);
+function cleanLineup(list, players) {
+  const ids = new Set(activeOf(players).map((p) => p.id));
+  const playing = [...new Set((Array.isArray(list) ? list : []).map(String))].filter((id) => ids.has(id));
+  if (playing.length < 3) throw err(400, 'Tick at least 3 players who played.');
+  return playing;
+}
 // Admin-only view: MVP leaderboard plus who has and hasn't voted in each game.
 async function bogAdmin(players) {
   const [roundsRaw, votesRaw] = await redis([['HGETALL', K.bogRounds], ['HGETALL', K.bogVotes]]);
   const votes = toObj(votesRaw), active = activeOf(players);
   const tally = Object.fromEntries(active.map((p) => [p.id, { name: p.name, points: 0, threes: 0, twos: 0, ones: 0 }]));
   const rounds = parseAll(roundsRaw).sort((a, b) => b.createdAt - a.createdAt).map((r) => {
-    const voted = [], missing = [], game = {};
+    const voted = [], missing = [], game = {}, inGame = new Set(lineupOf(r, players));
     for (const p of players) {
       const v = votes[r.id + '|' + p.id];
-      if (!v) { if (!p.removed) missing.push(p.name); continue; }
+      if (!v) { if (!p.removed && inGame.has(p.id)) missing.push(p.name); continue; }
       voted.push(p.name);
       parse(v).forEach((who, i) => {
         game[who] = (game[who] || 0) + 3 - i;   // this game's own count
@@ -185,7 +218,9 @@ async function bogAdmin(players) {
 async function getState(players) {
   const [pins, finesRaw, votesRaw, bogRaw] = await redis([['HGETALL', K.pins], ['HGETALL', K.fines], ['HGETALL', K.votes], ['HGETALL', K.bogRounds]]);
   const pinMap = toObj(pins), allVotes = toObj(votesRaw), now = Date.now();
-  const fines = parseAll(finesRaw).map((f) => {
+  const list = parseAll(finesRaw);
+  await settleOldFines(list, allVotes, players, now);
+  const fines = list.map((f) => {
     f.votes = votesFor(f, allVotes, players);
     f.need = f.need || 5;
     f.status = statusOf(f, f.votes, now);
@@ -194,9 +229,9 @@ async function getState(players) {
   return {
     players: players.map((p) => ({ id: p.id, name: p.name, removed: !!p.removed, hasPin: !!pinMap[p.id] })),
     fines,
-    // Game names only. Best on ground votes and results are never sent to the public page.
+    // Game names and lineups only. Best on ground votes and results are never sent to the public page.
     bogRounds: parseAll(bogRaw).sort((a, b) => b.createdAt - a.createdAt),
-    config: { votingHours: VOTING_HOURS, votesNeeded: needFor(players), maxFine: MAX_FINE, adminEnabled: !!adminCode() },
+    config: { votesNeeded: needFor(players), maxFine: MAX_FINE },
   };
 }
 
@@ -225,7 +260,7 @@ module.exports = async (req, res) => {
         const now = Date.now();
         const fine = {
           id: newId(''), by: b.player, target: b.target, reason, amount: cleanAmount(b.amount),
-          createdAt: now, deadline: now + VOTING_HOURS * 3600 * 1000, need: needFor(players),
+          createdAt: now, need: needFor(players),
         };
         const cmds = [['HSET', K.fines, fine.id, JSON.stringify(fine)]];
         // The person who writes the fine automatically agrees with it.
@@ -253,13 +288,15 @@ module.exports = async (req, res) => {
 
       case 'bog_vote': {
         await signIn(players, b.player, b.pin, false);
-        const picks = Array.isArray(b.picks) ? b.picks.map(String) : [];
-        const ids = activeOf(players).map((p) => p.id);
-        if (picks.length !== 3 || picks.some((x) => !ids.includes(x))) throw err(400, 'Pick a player for 3, 2 and 1 votes.');
-        if (new Set(picks).size !== 3) throw err(400, 'Pick three different players.');
-        if (picks.includes(b.player)) throw err(403, "You can't vote for yourself.");
         const round = await getRound(b.id);
         if (!round.open) throw err(409, 'Voting for that game has closed.');
+        const activeIds = activeOf(players).map((p) => p.id);
+        const lineup = lineupOf(round, players).filter((id) => activeIds.includes(id));
+        if (!lineup.includes(b.player)) throw err(403, "You weren't in the lineup for this game, so you can't vote in it.");
+        // Players may vote for themselves; all three picks must have played.
+        const picks = Array.isArray(b.picks) ? b.picks.map(String) : [];
+        if (picks.length !== 3 || picks.some((x) => !lineup.includes(x))) throw err(400, 'Pick 3, 2 and 1 votes from players who played.');
+        if (new Set(picks).size !== 3) throw err(400, 'Pick three different players.');
         const [set] = await redis([['HSETNX', K.bogVotes, round.id + '|' + b.player, JSON.stringify(picks)]]);
         if (set !== 1) throw err(409, "You've already voted for that game.");
         break;
@@ -272,6 +309,23 @@ module.exports = async (req, res) => {
 
       case 'admin_delete':
         await redis([['HDEL', K.fines, String(b.id)], ['HDEL', K.votes, ...players.map((p) => b.id + '|' + p.id)]]);
+        break;
+
+      case 'admin_close_fine': {   // ends voting now; decided on the votes cast so far
+        const fine = await getFine(b.id);
+        const [votesRaw] = await redis([['HGETALL', K.votes]]);
+        const votes = votesFor(fine, toObj(votesRaw), players);
+        if (statusOf(fine, votes, Date.now()) !== 'open') throw err(409, 'Voting on that fine has already finished.');
+        let yes = 0, no = 0;
+        for (const v of Object.values(votes)) v === 'yes' ? yes++ : no++;
+        fine.closed = yes > no ? 'passed' : 'failed';
+        fine.closedAt = Date.now();
+        await redis([['HSET', K.fines, fine.id, JSON.stringify(fine)]]);
+        break;
+      }
+
+      case 'admin_change_code':
+        await redis([['SET', K.admin, hashPin(cleanAdminCode(b.newCode))]]);
         break;
 
       case 'admin_edit_fine': {
@@ -310,7 +364,14 @@ module.exports = async (req, res) => {
       case 'admin_bog_open': {
         const name = String(b.roundName || '').trim().slice(0, 60);
         if (!name) throw err(400, 'Give the game a name, e.g. Round 5 v Tigers.');
-        const round = { id: newId(''), name, open: true, createdAt: Date.now() };
+        const round = { id: newId(''), name, open: true, createdAt: Date.now(), playing: cleanLineup(b.playing, players) };
+        await redis([['HSET', K.bogRounds, round.id, JSON.stringify(round)]]);
+        break;
+      }
+
+      case 'admin_bog_lineup': {
+        const round = await getRound(b.id);
+        round.playing = cleanLineup(b.playing, players);
         await redis([['HSET', K.bogRounds, round.id, JSON.stringify(round)]]);
         break;
       }
