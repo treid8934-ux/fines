@@ -128,6 +128,21 @@
   .stamp { font-family: var(--display); font-weight: 900; text-transform: uppercase; letter-spacing: .08em; font-size: 16px; padding: 2px 10px; border-radius: 4px; border: 3px solid currentColor; display: inline-block; transform: rotate(-3deg); }
   .stamp.passed { color: var(--red); } .stamp.failed { color: var(--green); } .stamp.lapsed { color: var(--muted); }
 
+  /* Past fines drop-down */
+  .past > summary { list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 14px 18px; font-weight: 700; font-size: 17px; color: var(--green-d); min-height: 44px; }
+  .past > summary::-webkit-details-marker { display: none; }
+  .past > summary .chev { font-size: 20px; transition: transform .15s; }
+  .past[open] > summary { border-bottom: 2px solid var(--line); }
+  .past[open] > summary .chev { transform: rotate(180deg); }
+  .filters { padding: 14px 18px; border-bottom: 2px solid var(--line); background: rgba(20,38,30,.03); }
+  .filters .row { margin-top: 12px; }
+  .filters .field { margin-bottom: 8px; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chips button { background: transparent; color: var(--green-d); border: 2px solid var(--line); padding: 7px 12px; font-size: 14px; min-height: 40px; }
+  .chips button:hover { background: rgba(20,38,30,.06); }
+  .chips button[aria-pressed="true"] { background: var(--green-d); color: var(--bg); border-color: var(--green-d); }
+  .chips button .n { font-family: var(--mono); opacity: .75; margin-left: 4px; }
+
   #toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--green-d); color: var(--bg); padding: 12px 18px; border-radius: 8px; max-width: calc(100% - 32px); display: none; z-index: 50; font-weight: 600; box-shadow: 0 6px 0 -2px var(--board); }
   #toast.bad { background: var(--red); color: #fff; }
   @media (max-width: 480px) { .row, .row3 { grid-template-columns: 1fr; } h1 { font-size: 26px; } .stats { grid-template-columns: repeat(2, 1fr); } }
@@ -190,8 +205,25 @@
   </section>
 
   <section>
-    <h2>Decided</h2>
-    <div class="panel" id="history"><div class="empty">Loading…</div></div>
+    <h2>Past fines <small id="pastCount"></small></h2>
+    <details class="panel past" id="pastBox">
+      <summary><span id="pastToggle">Show past fines</span><span class="chev" aria-hidden="true">▾</span></summary>
+      <div class="filters">
+        <div class="chips" id="pastStatus" role="group" aria-label="Filter by result"></div>
+        <div class="row">
+          <div class="field"><label for="pastPlayer">Player</label><select id="pastPlayer"></select></div>
+          <div class="field"><label for="pastSort">Sort</label><select id="pastSort">
+            <option value="new">Newest first</option>
+            <option value="old">Oldest first</option>
+            <option value="big">Biggest amount</option>
+            <option value="small">Smallest amount</option>
+            <option value="name">Player A–Z</option>
+          </select></div>
+        </div>
+        <div class="meta" id="pastSummary"></div>
+      </div>
+      <div id="history"><div class="empty">Loading…</div></div>
+    </details>
   </section>
 
   <section id="adminSec" hidden>
@@ -378,11 +410,57 @@ function render() {
   const mine = isPlayer() ? openFines.filter((f) => f.target !== me.id && !f.votes[me.id]).length : 0;
   $('openCount').textContent = openFines.length ? openFines.length + ' open' + (mine ? ' · ' + mine + ' waiting on you' : '') : '';
   $('open').replaceChildren(...(openFines.length ? openFines.map(fineCard) : [h('div', { class: 'empty' }, 'Nothing to vote on. Everyone is behaving, apparently.')]));
-  $('history').replaceChildren(...(done.length ? done.map(fineCard) : [h('div', { class: 'empty' }, 'No fines decided yet.')]));
+  renderPast(done);
 
   renderBog(players);
   renderAdmin();
 }
+
+// Past fines: collapsed by default, filter by result and player, sortable.
+const PAST_STATUSES = [['all', 'All'], ['passed', 'Fined'], ['failed', 'Let off'], ['lapsed', 'Lapsed']];
+let pastStatus = store('fines_past_status') || 'all';
+if (!PAST_STATUSES.some(([v]) => v === pastStatus)) pastStatus = 'all';
+$('pastSort').value = store('fines_past_sort') || 'new';
+if (!$('pastSort').value) $('pastSort').value = 'new';
+
+function renderPast(done) {
+  const n = done.length;
+  $('pastCount').textContent = n ? n + ' decided' : '';
+  $('pastToggle').textContent = $('pastBox').open ? 'Hide past fines' : n ? 'Show ' + n + ' past fine' + (n === 1 ? '' : 's') : 'Show past fines';
+
+  // Player list: everyone who has a decided fine, plus current players.
+  const ids = [...new Set([...active().map((p) => p.id), ...done.map((f) => f.target)])];
+  const opts = ids.map((id) => [id, nameOf(id)]).sort((a, b) => a[1].localeCompare(b[1]));
+  if (!$('pastPlayer').dataset.sig) { const saved = store('fines_past_player'); if (saved) $('pastPlayer').dataset.want = saved; }
+  fillSelect($('pastPlayer'), opts, 'Everyone');
+  if ($('pastPlayer').dataset.want) { if (ids.includes($('pastPlayer').dataset.want)) $('pastPlayer').value = $('pastPlayer').dataset.want; delete $('pastPlayer').dataset.want; }
+  const who = $('pastPlayer').value;
+
+  const forWho = who ? done.filter((f) => f.target === who) : done;
+  const count = (s) => (s === 'all' ? forWho.length : forWho.filter((f) => f.status === s).length);
+  $('pastStatus').replaceChildren(...PAST_STATUSES.map(([v, label]) =>
+    h('button', { type: 'button', 'aria-pressed': String(pastStatus === v), onclick: () => { pastStatus = v; store('fines_past_status', v); render(); } },
+      label, h('span', { class: 'n' }, String(count(v))))));
+
+  const list = forWho.filter((f) => pastStatus === 'all' || f.status === pastStatus);
+  const when = (f) => f.createdAt;
+  const sorters = {
+    new: (a, b) => when(b) - when(a),
+    old: (a, b) => when(a) - when(b),
+    big: (a, b) => b.amount - a.amount || when(b) - when(a),
+    small: (a, b) => a.amount - b.amount || when(b) - when(a),
+    name: (a, b) => nameOf(a.target).localeCompare(nameOf(b.target)) || when(b) - when(a),
+  };
+  list.sort(sorters[$('pastSort').value] || sorters.new);
+
+  const fined = list.filter((f) => f.status === 'passed').reduce((s, f) => s + f.amount, 0);
+  $('pastSummary').textContent = n ? 'Showing ' + list.length + ' of ' + n + (fined ? ' · ' + money(fined) + ' fined' : '') : '';
+  $('history').replaceChildren(...(list.length ? list.map(fineCard)
+    : [h('div', { class: 'empty' }, n ? 'No past fines match those filters.' : 'No fines decided yet.')]));
+}
+$('pastPlayer').addEventListener('change', () => { store('fines_past_player', $('pastPlayer').value || null); render(); });
+$('pastSort').addEventListener('change', () => { store('fines_past_sort', $('pastSort').value); render(); });
+$('pastBox').addEventListener('toggle', () => { if (state) renderPast(state.fines.filter((f) => f.status !== 'open')); });
 
 function updateHint() {
   const v = $('siName').value, admin = v === '~admin', pin = $('siPin');
