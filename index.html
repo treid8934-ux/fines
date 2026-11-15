@@ -514,6 +514,12 @@ function renderBog(players) {
       const others = players.filter((p) => lineupIds(r).includes(p.id));   // everyone who played, yourself included
       const pick = (label) => h('select', { 'aria-label': label, required: '' }, h('option', { value: '' }, 'Pick a player'), ...others.map((p) => h('option', { value: p.id }, p.name)));
       const sels = [pick('3 votes'), pick('2 votes'), pick('1 vote')];
+      // A player picked in one slot is hidden and disabled in the other two.
+      const syncPicks = () => sels.forEach((s) => {
+        const taken = new Set(sels.filter((o) => o !== s).map((o) => o.value).filter(Boolean));
+        for (const opt of s.options) if (opt.value) { opt.disabled = taken.has(opt.value); opt.hidden = taken.has(opt.value); }
+      });
+      sels.forEach((s) => s.addEventListener('change', syncPicks));
       card.append(h('form', { style: 'margin-top:10px', onsubmit: (ev) => {
         ev.preventDefault();
         const picks = sels.map((x) => x.value);
